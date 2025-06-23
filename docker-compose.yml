@@ -1,0 +1,58 @@
+# Modern Docker Compose için version satırı artık gerekli değil.
+services:
+  db:
+    image: postgres:15-alpine # Alpine versiyonu daha az yer kaplar
+    container_name: go-bank-api-db
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "127.0.0.1:5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: always
+
+  api:
+    build: .
+    container_name: go-bank-api
+    depends_on:
+      db:
+        # api servisinin başlaması için db servisinin SAĞLIKLI olmasını bekle
+        condition: service_healthy
+    restart: on-failure
+    ports:
+      - "${PORT}:${PORT}"
+    env_file:
+      - .env
+
+  migrate:
+    image: postgres:15-alpine
+    container_name: go-bank-api-migrate
+    depends_on:
+      db:
+        # migrate servisinin başlaması için db servisinin SAĞLIKLI olmasını bekle
+        condition: service_healthy
+    volumes:
+      # Bu volume tanımı doğru, yerel dosyaları container'a bağlıyor.
+      - ./db/migrations:/migrations
+    env_file:
+      - .env
+    environment:
+      # psql'in şifre sormaması için bu değişken gerekli
+      PGPASSWORD: ${DB_PASSWORD}
+    # 'entrypoint' yerine 'command' kullanmak bu tür tek seferlik işlemler için daha yaygındır.
+    # Komut 'sh' ile başlatıldı ve SQL dosya adı DOĞRU yazıldı.
+    command: >
+      sh -c "
+        echo 'Database ready, migration started...' &&
+        psql -h ${DB_HOST} -U ${DB_USER} -d ${DB_NAME} -f /migrations/001_create_users_table.sql
+      "
+
+volumes:
+  postgres_data: {}
