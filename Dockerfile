@@ -15,10 +15,10 @@ WORKDIR /app
 
 COPY --from=builder /app/main .
 
-COPY .env .
+COPY config.yml .
 
 COPY db/migrations ./db/migrations
 
-EXPOSE 8000
+EXPOSE 8080
 
 CMD ["/app/main"]

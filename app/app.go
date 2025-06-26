@@ -1,20 +1,20 @@
 package app
 
 import (
+	"go-bank-api/config"
 	"go-bank-api/db"
 	"go-bank-api/handler"
 	"go-bank-api/logger"
 	"go-bank-api/repository"
 	"go-bank-api/router"
 	"net/http"
-	"os"
-
-	"github.com/joho/godotenv"
 )
 
 func Run() {
-	_ = godotenv.Load()
+	config.LoadConfig(".")
 	logger.Init()
+	logger.Log.Info("Logger initialized")
+	logger.Log.Info("Configuration loaded successfully")
 
 	database, err := db.Connect()
 	if err != nil {
@@ -26,6 +26,9 @@ func Run() {
 	userHandler := handler.NewUserHandler(userRepo)
 	r := router.NewRouter(userHandler)
 
-	logger.Log.Infof("Server started at :%s", os.Getenv("PORT"))
-	logger.Log.Fatal(http.ListenAndServe(":"+os.Getenv("PORT"), r))
+	port := config.AppConfig.Server.Port // Konfigürasyonu buradan al
+	logger.Log.Infof("Server starting on port :%s", port)
+	if err := http.ListenAndServe(":"+port, r); err != nil {
+		logger.Log.Fatalf("Failed to start server: %v", err)
+	}
 }
