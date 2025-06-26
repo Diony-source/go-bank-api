@@ -73,7 +73,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppE
 		return common.NewAppError(http.StatusUnauthorized, "Invalid email or password", nil)
 	}
 
-	tokenString, err := service.GenerateJWT(user.Email)
+	tokenString, err := service.GenerateJWT(user)
 	if err != nil {
 		return common.NewAppError(http.StatusInternalServerError, "Could not generate token", err)
 	}
