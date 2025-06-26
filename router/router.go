@@ -7,7 +7,9 @@ import (
 
 func NewRouter(userHandler *handler.UserHandler) http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/register", userHandler.Register)
-	mux.HandleFunc("/login", userHandler.Login)
+
+	mux.Handle("/register", handler.ErrorHandlingMiddleware(userHandler.Register))
+	mux.Handle("/login", handler.ErrorHandlingMiddleware(userHandler.Login))
+
 	return mux
 }
