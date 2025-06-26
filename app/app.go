@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"go-bank-api/config"
 	"go-bank-api/db"
 	"go-bank-api/handler"
@@ -8,6 +9,10 @@ import (
 	"go-bank-api/repository"
 	"go-bank-api/router"
 	"net/http"
+	"os"
+	"os/signal"
+	"syscall"
+	"time"
 )
 
 func Run() {
@@ -27,8 +32,30 @@ func Run() {
 	r := router.NewRouter(userHandler)
 
 	port := config.AppConfig.Server.Port // Konfigürasyonu buradan al
-	logger.Log.Infof("Server starting on port :%s", port)
-	if err := http.ListenAndServe(":"+port, r); err != nil {
-		logger.Log.Fatalf("Failed to start server: %v", err)
+	srv := &http.Server{
+		Addr:    ":" + port,
+		Handler: r,
 	}
+
+	go func() {
+		logger.Log.Infof("Starting server on port %s", port)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			logger.Log.Fatalf("Error starting server: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+
+	<-quit
+	logger.Log.Warn("Shutdown signal received, Starting graceful shutdown...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Log.Fatalf("Server forced to shutdown: %v", err)
+	}
+
+	logger.Log.Info("Server exited properly")
 }
