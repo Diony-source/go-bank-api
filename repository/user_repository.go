@@ -23,8 +23,8 @@ func (r *UserRepository) CreateUser(user *model.User) error {
 	})
 	log.Info("Executing query to create a new user")
 
-	query := `INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, created_at`
-	err := r.DB.QueryRow(query, user.Username, user.Email, user.Password).Scan(&user.ID, &user.CreatedAt)
+	query := `INSERT INTO users (username, email, password) VALUES ($1, $2, $3) RETURNING id, created_at, role`
+	err := r.DB.QueryRow(query, user.Username, user.Email, user.Password).Scan(&user.ID, &user.CreatedAt, &user.Role)
 	if err != nil {
 		log.WithError(err).Error("Failed to execute create user query")
 		return err
@@ -37,8 +37,8 @@ func (r *UserRepository) GetUserByEmail(email string) (*model.User, error) {
 	log.Info("Executing query to get user by email")
 
 	user := &model.User{}
-	query := `SELECT id, username, email, password, created_at FROM users WHERE email=$1`
-	err := r.DB.QueryRow(query, email).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.CreatedAt)
+	query := `SELECT id, username, email, password, role, created_at FROM users WHERE email=$1`
+	err := r.DB.QueryRow(query, email).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.Role, &user.CreatedAt)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			log.Info("User not found in database")
