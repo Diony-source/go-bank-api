@@ -12,10 +12,10 @@ import (
 func Connect() (*sql.DB, error) {
 	cfg := config.AppConfig.Database
 
-	connStr := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
+	connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Password, cfg.Name)
 
-	safeConnStr := fmt.Sprintf("host=%s port=%d user=%s dbname=%s sslmode=disable",
+	safeConnStr := fmt.Sprintf("host=%s port=%s user=%s dbname=%s sslmode=disable",
 		cfg.Host, cfg.Port, cfg.User, cfg.Name)
 
 	logger.Log.WithField("connection", safeConnStr).Info("Attempting to connect to the database")
