@@ -33,3 +33,11 @@ func (s *AccountService) CreateNewAccount(userID int, currency string) (*model.A
 
 	return account, nil
 }
+
+// ListAccountsForUser lists accounts based on the user's role.
+func (s *AccountService) ListAccountsForUser(userID int, userRole string) ([]*model.Account, error) {
+	if userRole == "admin" {
+		return s.repo.GetAllAccounts()
+	}
+	return s.repo.GetAccountsByUserID(userID)
+}

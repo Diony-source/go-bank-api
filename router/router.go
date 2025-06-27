@@ -17,8 +17,11 @@ func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.Account
 	// These routes require a valid JWT (Authorization header) for access.
 
 	// Route for creating a new account
-	createAccountHandler := handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)
-	mux.Handle("/api/accounts", handler.AuthMiddleware(createAccountHandler))
+	accountListHandler := handler.ErrorHandlingMiddleware(accountHandler.ListAccounts)
+	mux.Handle("GET /api/accounts", handler.AuthMiddleware(accountListHandler))
+
+	accountCreateHandler := handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)
+	mux.Handle("POST /api/accounts", handler.AuthMiddleware(accountCreateHandler))
 
 	return mux
 }
