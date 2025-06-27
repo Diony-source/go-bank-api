@@ -1,16 +1,16 @@
 # .gitignore
 
 # ----------------- #
-# SIRLARI İÇEREN DOSYALAR
+# FILES CONTAINING SECRETS
 # ----------------- #
-# Ortam değişkenleri dosyası
+# Environment variables file
 .env
-# Viper konfigürasyon dosyası (sırları içeriyor)
+# Viper configuration file (contains secrets)
 config.yml
 
 
 # ----------------- #
-# İŞLETİM SİSTEMİ DOSYALARI
+# OPERATING SYSTEM FILES
 # ----------------- #
 # macOS
 .DS_Store
@@ -19,14 +19,14 @@ Thumbs.db
 
 
 # ----------------- #
-# DERLENMİŞ KOD
+# COMPILED CODE
 # ----------------- #
-# Go ile derlenmiş binary dosyası
+# Binary file compiled with Go
 go-bank-api
 main
 
 # ----------------- #
-# DİĞER
+# OTHER
 # ----------------- #
-# Docker veritabanı verileri
+# Docker database data
 postgres_data/
