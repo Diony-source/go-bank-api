@@ -49,3 +49,28 @@ func (r *UserRepository) GetUserByEmail(email string) (*model.User, error) {
 	}
 	return user, nil
 }
+
+// GetAllUsers retrieves all users from the database. For admin use only.
+func (r *UserRepository) GetAllUsers() ([]*model.User, error) {
+	log := logger.Log
+	log.Info("Executing query to get all users")
+
+	query := `SELECT id, username, email, role, created_at FROM users`
+	rows, err := r.DB.Query(query)
+	if err != nil {
+		log.WithError(err).Error("Failed to execute query for all users")
+		return nil, err
+	}
+	defer rows.Close()
+
+	var users []*model.User
+	for rows.Next() {
+		var user model.User
+		if err := rows.Scan(&user.ID, &user.Username, &user.Email, &user.Role, &user.CreatedAt); err != nil {
+			log.WithError(err).Error("Failed to scan user row")
+			return nil, err
+		}
+		users = append(users, &user)
+	}
+	return users, nil
+}

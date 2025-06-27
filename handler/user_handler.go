@@ -85,3 +85,19 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppE
 
 	return nil
 }
+
+// GetAllUsers lists all users in the system. Admin only.
+func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) *common.AppError {
+	logger.Log.Info("Admin request to list all users received")
+
+	users, err := h.Repo.GetAllUsers()
+	if err != nil {
+		return common.NewAppError(http.StatusInternalServerError, "Could not retrieve users", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(users)
+
+	return nil
+}
