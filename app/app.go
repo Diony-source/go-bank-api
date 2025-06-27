@@ -31,7 +31,7 @@ func Run() {
 	userHandler := handler.NewUserHandler(userRepo)
 	r := router.NewRouter(userHandler)
 
-	port := config.AppConfig.Server.Port // Konfigürasyonu buradan al
+	port := config.AppConfig.Server.Port
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,

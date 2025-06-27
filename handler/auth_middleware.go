@@ -49,11 +49,9 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		// Kullanıcı bilgilerini context'e ekle
 		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 		ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
 
-		// Context'i güncellenmiş request ile bir sonraki handler'a geç
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
 }

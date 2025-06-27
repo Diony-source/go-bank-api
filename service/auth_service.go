@@ -30,9 +30,8 @@ func CheckPasswordHash(password, hash string) bool {
 }
 
 func GenerateJWT(user *model.User) (string, error) {
-	expirationTime := time.Now().Add(24 * time.Hour) // Token geçerliliğini 24 saate çıkaralım.
+	expirationTime := time.Now().Add(24 * time.Hour)
 
-	// Yeni AppClaims yapımızı kullanarak "claims" oluşturuyoruz.
 	claims := &model.AppClaims{
 		UserID: user.ID,
 		Role:   user.Role,
@@ -43,10 +42,8 @@ func GenerateJWT(user *model.User) (string, error) {
 		},
 	}
 
-	// Token'ı AppClaims ve imzalama metodu ile oluşturuyoruz.
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
-	// Token'ı gizli anahtarımızla imzalayıp string'e çeviriyoruz.
 	tokenString, err := token.SignedString(getJwtKey())
 	if err != nil {
 		logger.Log.WithError(err).WithField("email", user.Email).Error("Failed to sign JWT")

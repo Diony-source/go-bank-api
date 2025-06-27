@@ -52,7 +52,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 	user.Password = ""
 	json.NewEncoder(w).Encode(user)
 
-	return nil // Başarılı durumda nil döner.
+	return nil
 }
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppError {
