@@ -1,3 +1,4 @@
+// File: app/app.go
 package app
 
 import (
@@ -8,6 +9,7 @@ import (
 	"go-bank-api/logger"
 	"go-bank-api/repository"
 	"go-bank-api/router"
+	"go-bank-api/service"
 	"net/http"
 	"os"
 	"os/signal"
@@ -27,10 +29,21 @@ func Run() {
 	}
 	defer database.Close()
 
+	// --- Wiring All Layers Together ---
+
+	// Layers for User
 	userRepo := repository.NewUserRepository(database)
 	userHandler := handler.NewUserHandler(userRepo)
-	r := router.NewRouter(userHandler)
 
+	// Account layers (added in Phase 2)
+	accountRepo := repository.NewAccountRepository(database)
+	accountService := service.NewAccountService(accountRepo)
+	accountHandler := handler.NewAccountHandler(accountService)
+
+	// Start the router with all handlers
+	r := router.NewRouter(userHandler, accountHandler)
+
+	// --- Phase 0 - Start the Server with Graceful Shutdown ---
 	port := config.AppConfig.Server.Port
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -38,17 +51,17 @@ func Run() {
 	}
 
 	go func() {
-		logger.Log.Infof("Starting server on port %s", port)
+		logger.Log.Infof("Server starting on port :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			logger.Log.Fatalf("Error starting server: %v", err)
+			logger.Log.Fatalf("Failed to start server: %v", err)
 		}
 	}()
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
 	<-quit
-	logger.Log.Warn("Shutdown signal received, Starting graceful shutdown...")
+
+	logger.Log.Warn("Shutdown signal received. Starting graceful shutdown...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
