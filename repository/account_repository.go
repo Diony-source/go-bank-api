@@ -83,3 +83,37 @@ func (r *AccountRepository) GetAllAccounts() ([]*model.Account, error) {
 	}
 	return accounts, nil
 }
+
+func (r *AccountRepository) GetAccountForUpdate(tx *sql.Tx, accountID int) (*model.Account, error) {
+	log := logger.Log.WithField("account_id", accountID)
+	log.Info("Executing query to get account for update")
+
+	account := &model.Account{}
+	query := `SELECT id, user_id, balance, currency FROM accounts WHERE id = $1 FOR UPDATE`
+	err := tx.QueryRow(query, accountID).Scan(&account.ID, &account.UserID, &account.Balance, &account.Currency)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Info("Account not found for update")
+		} else {
+			log.WithError(err).Error("Failed to execute get account for update query")
+		}
+		return nil, err
+	}
+	return account, nil
+}
+
+func (r *AccountRepository) UpdateAccountBalance(tx *sql.Tx, accountID int, newBalance float64) error {
+	log := logger.Log.WithFields(logrus.Fields{
+		"account_id":  accountID,
+		"new_balance": newBalance,
+	})
+	log.Info("Executing query to update account balance")
+
+	query := `UPDATE accounts SET balance = $1 WHERE id = $2`
+	_, err := tx.Exec(query, newBalance, accountID)
+	if err != nil {
+		log.WithError(err).Error("Failed to execute update account balance query")
+		return err
+	}
+	return nil
+}
