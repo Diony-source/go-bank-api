@@ -23,8 +23,8 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) *
 	var req struct {
 		Currency string `json:"currency" validate:"required,oneof=TRY USD EUR"`
 	}
-	if !common.ValidateAndDecode(w, r, &req) {
-		return nil
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
 	}
 
 	userID, ok := r.Context().Value(UserIDKey).(int)

@@ -22,11 +22,8 @@ func NewUserHandler(repo *repository.UserRepository) *UserHandler {
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.RegisterRequest
-	if !common.ValidateAndDecode(w, r, &req) {
-		// ValidateAndDecode already writes its own error, so we can return nil here.
-		// For better consistency, we could update it to return an AppError as well.
-		// For now, let's leave it like this. Returning a real AppError would be better.
-		return nil
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
 	}
 
 	log := logger.Log.WithFields(logrus.Fields{"username": req.Username, "email": req.Email})
@@ -57,8 +54,8 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.LoginRequest
-	if !common.ValidateAndDecode(w, r, &req) {
-		return nil
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
 	}
 
 	log := logger.Log.WithField("email", req.Email)

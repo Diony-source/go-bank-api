@@ -8,19 +8,19 @@ import (
 func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.AccountHandler) http.Handler {
 	mux := http.NewServeMux()
 
+	// Public routes
 	mux.Handle("POST /register", handler.ErrorHandlingMiddleware(userHandler.Register))
 	mux.Handle("POST /login", handler.ErrorHandlingMiddleware(userHandler.Login))
 
-	accountListHandler := handler.ErrorHandlingMiddleware(accountHandler.ListAccounts)
-	mux.Handle("GET /api/accounts", handler.AuthMiddleware(accountListHandler))
+	// Auth protected User routes
+	mux.Handle("GET /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.ListAccounts)))
+	mux.Handle("POST /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)))
 
-	accountCreateHandler := handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)
-	mux.Handle("POST /api/accounts", handler.AuthMiddleware(accountCreateHandler))
+	// Auth and Admin protected routes
+	mux.Handle("GET /api/admin/users", handler.AuthMiddleware(handler.AdminMiddleware(handler.ErrorHandlingMiddleware(userHandler.GetAllUsers))))
 
-	getAllUsersHandler := handler.ErrorHandlingMiddleware(userHandler.GetAllUsers)
-	adminProtectedHandler := handler.AdminMiddleware(getAllUsersHandler)
-	authProtectedHandler := handler.AuthMiddleware(adminProtectedHandler)
-	mux.Handle("GET /api/admin/users", authProtectedHandler)
+	// Health Check
+	mux.HandleFunc("GET /health", handler.HealthCheck)
 
 	return mux
 }
