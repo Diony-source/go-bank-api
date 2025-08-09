@@ -74,3 +74,33 @@ func (r *UserRepository) GetAllUsers() ([]*model.User, error) {
 	}
 	return users, nil
 }
+
+// UpdateUserRole updates a user's role in the database.
+func (r *UserRepository) UpdateUserRole(userID int, newRole string) error {
+	log := logger.Log.WithFields(logrus.Fields{
+		"user_id":  userID,
+		"new_role": newRole,
+	})
+	log.Info("Executing query to update user role")
+
+	query := `UPDATE users SET role = $1 WHERE id = $2`
+	result, err := r.DB.Exec(query, newRole, userID)
+	if err != nil {
+		log.WithError(err).Error("Failed to execute update user role query")
+		return err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.WithError(err).Error("Failed to get rows affected after role update")
+		return err
+	}
+
+	if rowsAffected == 0 {
+		// This means no user with the given ID was found.
+		return sql.ErrNoRows
+	}
+
+	log.Info("User role updated successfully")
+	return nil
+}

@@ -56,20 +56,33 @@ func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *c
 	if !ok {
 		return common.NewAppError(http.StatusUnauthorized, "Invalid user ID in token", nil)
 	}
-	userRole, ok := r.Context().Value(UserRoleKey).(string)
-	if !ok {
-		return common.NewAppError(http.StatusUnauthorized, "Invalid user role in token", nil)
-	}
 
-	log := logger.Log.WithFields(logrus.Fields{
-		"user_id": userID,
-		"role":    userRole,
-	})
-	log.Info("List accounts request received")
+	log := logger.Log.WithField("user_id", userID)
+	log.Info("List user's own accounts request received")
 
-	accounts, err := h.service.ListAccountsForUser(userID, userRole)
+	// UPDATED: No longer passing userRole
+	accounts, err := h.service.ListAccountsForUser(userID)
 	if err != nil {
 		return common.NewAppError(http.StatusInternalServerError, "Could not retrieve accounts", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(accounts)
+
+	return nil
+}
+
+// GetAllAccounts lists all accounts in the system. Admin only.
+func (h *AccountHandler) GetAllAccounts(w http.ResponseWriter, r *http.Request) *common.AppError {
+	// We can get the admin's ID for logging purposes, even if not used in the query.
+	adminID, _ := r.Context().Value(UserIDKey).(int)
+	log := logger.Log.WithField("admin_user_id", adminID)
+	log.Info("Admin request to list all accounts received")
+
+	accounts, err := h.service.GetAllAccounts()
+	if err != nil {
+		return common.NewAppError(http.StatusInternalServerError, "Could not retrieve all accounts", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")

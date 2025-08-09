@@ -30,12 +30,17 @@ func Run() {
 	defer database.Close()
 
 	// --- Wiring All Layers Together ---
+	// This section is crucial for dependency injection.
+	// We create instances of our repositories, services, and handlers here.
 
 	// Layers for User
 	userRepo := repository.NewUserRepository(database)
-	userHandler := handler.NewUserHandler(userRepo)
+	// NEW: Create the user service and pass the repository to it.
+	userService := service.NewUserService(userRepo)
+	// UPDATED: Pass both the repository and the new service to the user handler.
+	userHandler := handler.NewUserHandler(userRepo, userService)
 
-	// Account layers (added in Phase 2)
+	// Layers for Account
 	accountRepo := repository.NewAccountRepository(database)
 	accountService := service.NewAccountService(accountRepo)
 	accountHandler := handler.NewAccountHandler(accountService)
@@ -43,7 +48,7 @@ func Run() {
 	// Start the router with all handlers
 	r := router.NewRouter(userHandler, accountHandler)
 
-	// --- Phase 0 - Start the Server with Graceful Shutdown ---
+	// --- Start the Server with Graceful Shutdown ---
 	port := config.AppConfig.Server.Port
 	srv := &http.Server{
 		Addr:    ":" + port,

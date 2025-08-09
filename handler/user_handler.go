@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"database/sql"
 	"encoding/json"
 	"go-bank-api/common"
 	"go-bank-api/logger"
@@ -8,16 +9,18 @@ import (
 	"go-bank-api/repository"
 	"go-bank-api/service"
 	"net/http"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 )
 
 type UserHandler struct {
-	Repo *repository.UserRepository
+	Repo    *repository.UserRepository
+	Service *service.UserService // NEW FIELD
 }
 
-func NewUserHandler(repo *repository.UserRepository) *UserHandler {
-	return &UserHandler{Repo: repo}
+func NewUserHandler(repo *repository.UserRepository, service *service.UserService) *UserHandler {
+	return &UserHandler{Repo: repo, Service: service} // UPDATED
 }
 
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.AppError {
@@ -96,5 +99,39 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) *commo
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(users)
 
+	return nil
+}
+
+// UpdateUserRole handles the logic to update a user's role.
+// It's an admin-only operation.
+func (h *UserHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) *common.AppError {
+	// Get the user ID from the URL path, e.g., /api/admin/users/{id}/role
+	userIDStr := r.PathValue("id")
+	userID, err := strconv.Atoi(userIDStr)
+	if err != nil {
+		return common.NewAppError(http.StatusBadRequest, "Invalid user ID in URL path", err)
+	}
+
+	var req struct {
+		Role model.Role `json:"role" validate:"required,oneof=admin user"`
+	}
+
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
+	}
+
+	log := logger.Log.WithFields(logrus.Fields{"user_id_to_update": userID, "new_role": req.Role})
+	log.Info("Admin request to update user role received")
+
+	if err := h.Service.UpdateUserRole(userID, req.Role); err != nil {
+		if err == sql.ErrNoRows {
+			return common.NewAppError(http.StatusNotFound, "User with the specified ID not found", err)
+		}
+		return common.NewAppError(http.StatusInternalServerError, "Could not update user role", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"message": "User role updated successfully"})
 	return nil
 }
