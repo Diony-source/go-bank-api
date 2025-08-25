@@ -10,10 +10,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// AccountHandler holds dependencies for account-related handlers.
 type AccountHandler struct {
 	service *service.AccountService
 }
 
+// NewAccountHandler creates a new AccountHandler with its dependencies.
 func NewAccountHandler(service *service.AccountService) *AccountHandler {
 	return &AccountHandler{service: service}
 }
@@ -50,7 +52,7 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) *
 	return nil
 }
 
-// ListAccounts lists the accounts according to the incoming request.
+// ListAccounts lists the accounts for the currently authenticated user.
 func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *common.AppError {
 	userID, ok := r.Context().Value(UserIDKey).(int)
 	if !ok {
@@ -60,7 +62,6 @@ func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *c
 	log := logger.Log.WithField("user_id", userID)
 	log.Info("List user's own accounts request received")
 
-	// UPDATED: No longer passing userRole
 	accounts, err := h.service.ListAccountsForUser(userID)
 	if err != nil {
 		return common.NewAppError(http.StatusInternalServerError, "Could not retrieve accounts", err)
@@ -75,7 +76,6 @@ func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *c
 
 // GetAllAccounts lists all accounts in the system. Admin only.
 func (h *AccountHandler) GetAllAccounts(w http.ResponseWriter, r *http.Request) *common.AppError {
-	// We can get the admin's ID for logging purposes, even if not used in the query.
 	adminID, _ := r.Context().Value(UserIDKey).(int)
 	log := logger.Log.WithField("admin_user_id", adminID)
 	log.Info("Admin request to list all accounts received")

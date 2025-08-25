@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 )
 
+// contextKey defines a custom type for context keys to avoid collisions.
 type contextKey string
 
 const (
@@ -18,6 +19,7 @@ const (
 	UserRoleKey contextKey = "userRole"
 )
 
+// AuthMiddleware validates the JWT from the Authorization header.
 func AuthMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		authHeader := r.Header.Get("Authorization")
@@ -36,7 +38,6 @@ func AuthMiddleware(next http.Handler) http.Handler {
 
 		tokenString := headerParts[1]
 		claims := &model.AppClaims{}
-
 		jwtKey := []byte(config.AppConfig.JWT.SecretKey)
 
 		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
@@ -49,6 +50,7 @@ func AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
+		// If the token is valid, store user info in the request context.
 		ctx := context.WithValue(r.Context(), UserIDKey, claims.UserID)
 		ctx = context.WithValue(ctx, UserRoleKey, claims.Role)
 
@@ -56,11 +58,12 @@ func AuthMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// AdminMiddleware checks if the user has admin privileges.
 func AdminMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		role, ok := r.Context().Value(UserRoleKey).(string)
 
-		if !ok || role != "admin" {
+		if !ok || role != string(model.RoleAdmin) { // Using the constant for safety
 			err := common.NewAppError(http.StatusForbidden, "Access denied. Admin privileges required.", nil)
 			err.Send(w)
 			return

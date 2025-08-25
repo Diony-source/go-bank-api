@@ -14,15 +14,18 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// UserHandler holds dependencies for user-related handlers.
 type UserHandler struct {
 	Repo    *repository.UserRepository
-	Service *service.UserService // NEW FIELD
+	Service *service.UserService
 }
 
+// NewUserHandler creates a new UserHandler with its dependencies.
 func NewUserHandler(repo *repository.UserRepository, service *service.UserService) *UserHandler {
-	return &UserHandler{Repo: repo, Service: service} // UPDATED
+	return &UserHandler{Repo: repo, Service: service}
 }
 
+// Register handles the user registration request.
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.RegisterRequest
 	if err := common.ValidateAndDecode(r, &req); err != nil {
@@ -55,6 +58,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 	return nil
 }
 
+// Login handles the user login request and returns a JWT.
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.LoginRequest
 	if err := common.ValidateAndDecode(r, &req); err != nil {
@@ -102,10 +106,8 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) *commo
 	return nil
 }
 
-// UpdateUserRole handles the logic to update a user's role.
-// It's an admin-only operation.
+// UpdateUserRole updates a user's role. Admin only.
 func (h *UserHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) *common.AppError {
-	// Get the user ID from the URL path, e.g., /api/admin/users/{id}/role
 	userIDStr := r.PathValue("id")
 	userID, err := strconv.Atoi(userIDStr)
 	if err != nil {

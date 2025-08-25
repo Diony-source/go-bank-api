@@ -17,6 +17,7 @@ import (
 	"time"
 )
 
+// Run initializes and starts the application.
 func Run() {
 	config.LoadConfig(".")
 	logger.Init()
@@ -29,32 +30,29 @@ func Run() {
 	}
 	defer database.Close()
 
-	// --- Wiring All Layers Together ---
-	// This section is crucial for dependency injection.
-	// We create instances of our repositories, services, and handlers here.
-
-	// Layers for User
+	// --- Dependency Injection ---
 	userRepo := repository.NewUserRepository(database)
-	// NEW: Create the user service and pass the repository to it.
 	userService := service.NewUserService(userRepo)
-	// UPDATED: Pass both the repository and the new service to the user handler.
 	userHandler := handler.NewUserHandler(userRepo, userService)
 
-	// Layers for Account
 	accountRepo := repository.NewAccountRepository(database)
 	accountService := service.NewAccountService(accountRepo)
 	accountHandler := handler.NewAccountHandler(accountService)
 
-	// Start the router with all handlers
-	r := router.NewRouter(userHandler, accountHandler)
+	transactionRepo := repository.NewTransactionRepository(database)
+	transactionService := service.NewTransactionService(database, accountRepo, transactionRepo)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
 
-	// --- Start the Server with Graceful Shutdown ---
+	r := router.NewRouter(userHandler, accountHandler, transactionHandler)
+
+	// --- Server Initialization ---
 	port := config.AppConfig.Server.Port
 	srv := &http.Server{
 		Addr:    ":" + port,
 		Handler: r,
 	}
 
+	// Start server in a goroutine to allow for graceful shutdown.
 	go func() {
 		logger.Log.Infof("Server starting on port :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -62,10 +60,10 @@ func Run() {
 		}
 	}()
 
+	// Wait for interrupt signal for graceful shutdown.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
-
 	logger.Log.Warn("Shutdown signal received. Starting graceful shutdown...")
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
