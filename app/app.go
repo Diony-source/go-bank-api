@@ -3,6 +3,7 @@ package app
 
 import (
 	"context"
+	"database/sql"
 	"go-bank-api/config"
 	"go-bank-api/db"
 	"go-bank-api/handler"
@@ -74,4 +75,32 @@ func Run() {
 	}
 
 	logger.Log.Info("Server exited properly")
+}
+
+// TestApp holds dependencies for a test instance of the application.
+type TestApp struct {
+	Router http.Handler
+	DB     *sql.DB
+}
+
+// NewTestApp initializes the application for testing without starting the server.
+func NewTestApp(db *sql.DB) *TestApp {
+	userRepo := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepo)
+	userHandler := handler.NewUserHandler(userRepo, userService)
+
+	accountRepo := repository.NewAccountRepository(db)
+	accountService := service.NewAccountService(accountRepo)
+	accountHandler := handler.NewAccountHandler(accountService)
+
+	transactionRepo := repository.NewTransactionRepository(db)
+	transactionService := service.NewTransactionService(db, accountRepo, transactionRepo)
+	transactionHandler := handler.NewTransactionHandler(transactionService)
+
+	r := router.NewRouter(userHandler, accountHandler, transactionHandler)
+
+	return &TestApp{
+		Router: r,
+		DB:     db,
+	}
 }
