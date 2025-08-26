@@ -6,13 +6,13 @@ import (
 	"go-bank-api/repository"
 )
 
-// UserService handles user-related business logic.
+// UserService now depends on the IUserRepository interface, not the concrete struct.
 type UserService struct {
-	userRepo *repository.UserRepository
+	userRepo repository.IUserRepository // UPDATED
 }
 
-// NewUserService creates a new UserService.
-func NewUserService(userRepo *repository.UserRepository) *UserService {
+// NewUserService accepts the interface, allowing for mocks to be injected.
+func NewUserService(userRepo repository.IUserRepository) *UserService { // UPDATED
 	return &UserService{userRepo: userRepo}
 }
 
@@ -22,8 +22,6 @@ func (s *UserService) UpdateUserRole(userID int, newRole model.Role) error {
 	if newRole != model.RoleAdmin && newRole != model.RoleUser {
 		return errors.New("invalid role specified")
 	}
-	// In the future, more complex logic can be added here.
-	// e.g., "The last admin cannot demote themselves."
 
 	return s.userRepo.UpdateUserRole(userID, string(newRole))
 }

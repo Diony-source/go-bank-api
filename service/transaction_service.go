@@ -25,11 +25,11 @@ var (
 
 type TransactionService struct {
 	db              *sql.DB
-	accountRepo     *repository.AccountRepository
-	transactionRepo *repository.TransactionRepository
+	accountRepo     repository.IAccountRepository     // UPDATED
+	transactionRepo repository.ITransactionRepository // UPDATED
 }
 
-func NewTransactionService(db *sql.DB, accountRepo *repository.AccountRepository, transactionRepo *repository.TransactionRepository) *TransactionService {
+func NewTransactionService(db *sql.DB, accountRepo repository.IAccountRepository, transactionRepo repository.ITransactionRepository) *TransactionService { // UPDATED
 	return &TransactionService{
 		db:              db,
 		accountRepo:     accountRepo,

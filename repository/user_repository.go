@@ -8,6 +8,14 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// IUserRepository defines the contract for user database operations.
+type IUserRepository interface {
+	CreateUser(user *model.User) error
+	GetUserByEmail(email string) (*model.User, error)
+	GetAllUsers() ([]*model.User, error)
+	UpdateUserRole(userID int, newRole string) error
+}
+
 type UserRepository struct {
 	DB *sql.DB
 }

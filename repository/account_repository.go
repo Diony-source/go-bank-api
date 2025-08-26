@@ -1,3 +1,4 @@
+// repository/account_repository.go
 package repository
 
 import (
@@ -8,10 +9,22 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// IAccountRepository defines the contract for account database operations.
+type IAccountRepository interface {
+	CreateAccount(account *model.Account) error
+	GetAccountsByUserID(userID int) ([]*model.Account, error)
+	GetAllAccounts() ([]*model.Account, error)
+	GetAccountForUpdate(tx *sql.Tx, accountID int) (*model.Account, error)
+	UpdateAccountBalance(tx *sql.Tx, accountID int, newBalance float64) error
+	DepositToAccount(accountID int, amount float64) (*model.Account, error)
+}
+
+// AccountRepository implements IAccountRepository.
 type AccountRepository struct {
 	DB *sql.DB
 }
 
+// NewAccountRepository creates a new AccountRepository.
 func NewAccountRepository(db *sql.DB) *AccountRepository {
 	return &AccountRepository{DB: db}
 }
@@ -59,7 +72,7 @@ func (r *AccountRepository) GetAccountsByUserID(userID int) ([]*model.Account, e
 	return accounts, nil
 }
 
-// GetAllAccounts retrieves all accounts from the database. For admin use only.
+// GetAllAccounts retrieves all accounts from the database. Admin only.
 func (r *AccountRepository) GetAllAccounts() ([]*model.Account, error) {
 	log := logger.Log
 	log.Info("Executing query to get all accounts")
@@ -84,6 +97,7 @@ func (r *AccountRepository) GetAllAccounts() ([]*model.Account, error) {
 	return accounts, nil
 }
 
+// GetAccountForUpdate locks and retrieves an account row within a transaction.
 func (r *AccountRepository) GetAccountForUpdate(tx *sql.Tx, accountID int) (*model.Account, error) {
 	log := logger.Log.WithField("account_id", accountID)
 	log.Info("Executing query to get account for update")
@@ -102,6 +116,7 @@ func (r *AccountRepository) GetAccountForUpdate(tx *sql.Tx, accountID int) (*mod
 	return account, nil
 }
 
+// UpdateAccountBalance updates an account's balance within a transaction.
 func (r *AccountRepository) UpdateAccountBalance(tx *sql.Tx, accountID int, newBalance float64) error {
 	log := logger.Log.WithFields(logrus.Fields{
 		"account_id":  accountID,
@@ -116,4 +131,41 @@ func (r *AccountRepository) UpdateAccountBalance(tx *sql.Tx, accountID int, newB
 		return err
 	}
 	return nil
+}
+
+// DepositToAccount adds a specified amount to an account's balance.
+func (r *AccountRepository) DepositToAccount(accountID int, amount float64) (*model.Account, error) {
+	log := logger.Log.WithFields(logrus.Fields{
+		"account_id": accountID,
+		"amount":     amount,
+	})
+	log.Info("Executing query to deposit funds")
+
+	var updatedAccount model.Account
+	query := `
+		UPDATE accounts 
+		SET balance = balance + $1 
+		WHERE id = $2 
+		RETURNING id, user_id, account_number, balance, currency, created_at`
+
+	err := r.DB.QueryRow(query, amount, accountID).Scan(
+		&updatedAccount.ID,
+		&updatedAccount.UserID,
+		&updatedAccount.AccountNumber,
+		&updatedAccount.Balance,
+		&updatedAccount.Currency,
+		&updatedAccount.CreatedAt,
+	)
+
+	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Info("Account not found for deposit")
+			return nil, err
+		}
+		log.WithError(err).Error("Failed to execute deposit query")
+		return nil, err
+	}
+
+	log.Info("Funds deposited successfully")
+	return &updatedAccount, nil
 }

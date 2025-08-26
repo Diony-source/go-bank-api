@@ -8,6 +8,12 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// ITransactionRepository defines the contract for transaction database operations.
+type ITransactionRepository interface {
+	CreateTransaction(tx *sql.Tx, transaction *model.Transaction) error
+}
+
+// TransactionRepository implements ITransactionRepository.
 type TransactionRepository struct {
 	DB *sql.DB
 }
