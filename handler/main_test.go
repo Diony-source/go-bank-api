@@ -6,7 +6,11 @@ import (
 	"fmt"
 	"go-bank-api/config"
 	"go-bank-api/logger"
+	"go-bank-api/repository"
+	"go-bank-api/router"
+	"go-bank-api/service"
 	"log"
+	"net/http"
 	"os"
 	"testing"
 	"time"
@@ -17,27 +21,33 @@ import (
 	_ "github.com/lib/pq"
 )
 
-var testDB *sql.DB
+// TestApp holds dependencies for a test instance of the application.
+type TestApp struct {
+	Router http.Handler
+	DB     *sql.DB
+}
 
-// TestMain sets up the test database for the handler package.
+var testApp *TestApp
+
+// TestMain sets up the test environment for the handler package.
 func TestMain(m *testing.M) {
 	logger.Init()
-	config.LoadConfig("../")
+	config.LoadConfig("../") // Load config from root directory
 
-	testDbConnStr := fmt.Sprintf("postgres://%s:%s@localhost:5434/%s_test?sslmode=disable",
+	testDbConnStr := fmt.Sprintf("host=localhost port=5434 user=%s password=%s dbname=%s sslmode=disable",
 		config.AppConfig.Database.User,
 		config.AppConfig.Database.Password,
-		config.AppConfig.Database.Name,
+		config.AppConfig.Database.Name+"_test",
 	)
 
-	var err error
-	testDB, err = sql.Open("postgres", testDbConnStr)
+	db, err := sql.Open("postgres", testDbConnStr)
 	if err != nil {
 		log.Fatalf("could not connect to test database: %v", err)
 	}
 
+	// Retry connection
 	for i := 0; i < 5; i++ {
-		err = testDB.Ping()
+		err = db.Ping()
 		if err == nil {
 			break
 		}
@@ -49,10 +59,34 @@ func TestMain(m *testing.M) {
 
 	runMigrations(testDbConnStr)
 
+	testApp = setupTestApp(db)
+
 	exitCode := m.Run()
 
-	testDB.Close()
+	db.Close()
 	os.Exit(exitCode)
+}
+
+// setupTestApp initializes the application for testing without starting the server.
+func setupTestApp(db *sql.DB) *TestApp {
+	userRepo := repository.NewUserRepository(db)
+	userService := service.NewUserService(userRepo)
+	userHandler := NewUserHandler(userRepo, userService)
+
+	accountRepo := repository.NewAccountRepository(db)
+	accountService := service.NewAccountService(accountRepo)
+	accountHandler := NewAccountHandler(accountService)
+
+	transactionRepo := repository.NewTransactionRepository(db)
+	transactionService := service.NewTransactionService(db, accountRepo, transactionRepo)
+	transactionHandler := NewTransactionHandler(transactionService)
+
+	r := router.NewRouter(userHandler, accountHandler, transactionHandler)
+
+	return &TestApp{
+		Router: r,
+		DB:     db,
+	}
 }
 
 func runMigrations(connStr string) {
