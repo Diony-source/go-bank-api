@@ -9,12 +9,24 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
     ports:
-      - "127.0.0.1:5433:5432"
+      - "127.0.0.1:5433:5432" # Main DB port
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: always
+
+  # db_test: Dedicated database for integration tests.
+  db_test:
+    image: postgres:15-alpine
+    container_name: go-bank-api-db-test
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}_test # Note the _test suffix
+    ports:
+      - "127.0.0.1:5434:5432" # Test DB on a different host port
     restart: always
 
   api:
@@ -39,7 +51,7 @@ services:
       - ./db/migrations:/migrations
     command: [
       "-path=/migrations",
-      "-database=postgres://postgres:159357@db:5432/go_bank_api?sslmode=disable",
+      "-database=postgres://${DB_USER}:${DB_PASSWORD}@db:5432/${DB_NAME}?sslmode=disable",
       "up"
     ]
 
