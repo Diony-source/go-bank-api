@@ -68,7 +68,18 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 	return nil
 }
 
-// Login handles the user login request and returns a JWT.
+// Login godoc
+// @Summary      User login
+// @Description  Authenticates a user and returns a JWT token
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        credentials body model.LoginRequest true "User Credentials"
+// @Success      200  {object}  map[string]string "{"token": "..."}"
+// @Failure      400  {object}  common.AppError "Invalid request body"
+// @Failure      401  {object}  common.AppError "Invalid email or password"
+// @Failure      500  {object}  common.AppError "Internal server error"
+// @Router       /login [post]
 func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.LoginRequest
 	if err := common.ValidateAndDecode(r, &req); err != nil {
@@ -100,7 +111,17 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppE
 	return nil
 }
 
-// GetAllUsers lists all users in the system. Admin only.
+// GetAllUsers godoc
+// @Summary      Get all users
+// @Description  Retrieves a list of all users. Admin access required.
+// @Tags         admin
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.User
+// @Failure      401  {object}  common.AppError "Unauthorized"
+// @Failure      403  {object}  common.AppError "Forbidden"
+// @Failure      500  {object}  common.AppError "Internal server error"
+// @Router       /api/admin/users [get]
 func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) *common.AppError {
 	logger.Log.Info("Admin request to list all users received")
 
@@ -116,7 +137,22 @@ func (h *UserHandler) GetAllUsers(w http.ResponseWriter, r *http.Request) *commo
 	return nil
 }
 
-// UpdateUserRole updates a user's role. Admin only.
+// UpdateUserRole godoc
+// @Summary      Update a user's role
+// @Description  Updates the role of a specific user. This is an admin-only endpoint.
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id   path      int  true  "User ID to be updated"
+// @Param        role body      model.UpdateUserRoleRequest true "The new role for the user"
+// @Success      200  {object}  map[string]string "{"message": "User role updated successfully"}"
+// @Failure      400  {object}  common.AppError "Invalid user ID in URL path or invalid request body"
+// @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
+// @Failure      403  {object}  common.AppError "Forbidden: User does not have admin privileges"
+// @Failure      404  {object}  common.AppError "User with the specified ID not found"
+// @Failure      500  {object}  common.AppError "Internal server error while updating user role"
+// @Router       /api/admin/users/{id}/role [patch]
 func (h *UserHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) *common.AppError {
 	userIDStr := r.PathValue("id")
 	userID, err := strconv.Atoi(userIDStr)
@@ -124,10 +160,7 @@ func (h *UserHandler) UpdateUserRole(w http.ResponseWriter, r *http.Request) *co
 		return common.NewAppError(http.StatusBadRequest, "Invalid user ID in URL path", err)
 	}
 
-	var req struct {
-		Role model.Role `json:"role" validate:"required,oneof=admin user"`
-	}
-
+	var req model.UpdateUserRoleRequest // Use the dedicated request model
 	if err := common.ValidateAndDecode(r, &req); err != nil {
 		return err
 	}
