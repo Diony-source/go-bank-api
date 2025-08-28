@@ -33,8 +33,15 @@ func Run() {
 
 	// --- Dependency Injection ---
 	userRepo := repository.NewUserRepository(database)
+	tokenRepo := repository.NewTokenRepository(database)
+
+	// The old, stateless service functions are now part of AuthService.
+	// We'll need to update the handlers to use this new service.
+	authService := service.NewAuthService(userRepo, tokenRepo)
+
 	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userRepo, userService)
+	// Pass authService to userHandler where authentication logic is needed.
+	userHandler := handler.NewUserHandler(userRepo, userService, authService)
 
 	accountRepo := repository.NewAccountRepository(database)
 	accountService := service.NewAccountService(accountRepo)
