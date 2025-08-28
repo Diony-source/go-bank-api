@@ -1,0 +1,64 @@
+# file: .github/workflows/ci.yml
+
+name: Go Bank API CI
+
+# Bu iş akışının ne zaman tetikleneceğini belirler.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # 'test' adında tek bir işimiz var.
+  test:
+    # Bu işin Ubuntu'nun en son sürümünde çalışacağını belirtir.
+    runs-on: ubuntu-latest
+
+    # Servisler, bu iş ile birlikte çalışacak diğer Docker konteynerlerini tanımlar.
+    services:
+      # Test veritabanımız için bir Postgres servisi başlatıyoruz.
+      postgres:
+        image: postgres:15-alpine
+        # Konteynerin içindeki veritabanı için çevre değişkenleri.
+        # Bunlar, test kodumuzun beklediği değişkenlerle aynı olmalı.
+        env:
+          POSTGRES_USER: ${DB_USER:-postgres}
+          POSTGRES_PASSWORD: ${DB_PASSWORD:-password}
+          POSTGRES_DB: ${DB_NAME:-go-bank-api}_test
+        # Port yönlendirmesi: Konteynerin 5432 portunu, sanal makinenin 5434 portuna bağlar.
+        ports:
+          - 5434:5432
+        # Sağlık kontrolü, testler başlamadan önce veritabanının hazır olduğundan emin olur.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    
+    # Adımlar, bu işin sırayla yapacağı eylemlerdir.
+    steps:
+      # 1. Adım: Kodu sanal makineye indirir.
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      # 2. Adım: Belirtilen Go sürümünü kurar.
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.24.3'
+
+      # 3. Adım: Testleri çalıştırır.
+      - name: Run tests
+        # Testlerin çalışacağı çevre değişkenlerini burada tanımlıyoruz.
+        # GitHub Actions, servis adını (postgres) host adı olarak otomatikman atar.
+        env:
+          DB_HOST: postgres
+          DB_PORT: 5434
+          DB_USER: ${DB_USER:-postgres}
+          DB_PASSWORD: ${DB_PASSWORD:-password}
+          DB_NAME: ${DB_NAME:-go-bank-api} # Ana DB adı
+          JWT_SECRET_KEY: "a_very_secret_key_for_ci"
+          PORT: 8080
+        # Tüm testleri çalıştıran komut.
+        run: go test -v ./...
