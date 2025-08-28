@@ -57,9 +57,8 @@ jobs:
           echo "  secret_key: \"${{ secrets.JWT_SECRET_KEY }}\"" >> config.yml
 
       - name: Run tests
-        # Env variables are still useful for other potential tools, but the primary config
-        # now comes from the generated config.yml, ensuring consistency.
         env:
-          # We only need to provide the secret key here now.
+          # The JWT secret is still passed as an env var for Viper to pick it up,
+          # as it's not ideal to write secrets to files, even temporary ones.
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         run: go test -v ./...
