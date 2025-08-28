@@ -30,6 +30,7 @@ import (
 var testApp *app.TestApp
 var authService *service.AuthService
 
+// TestMain sets up the test environment for the router package.
 func TestMain(m *testing.M) {
 	logger.Init()
 	config.LoadConfig("../")
@@ -108,6 +109,8 @@ func createUserWithRoleForTest(t *testing.T, username, email, password string, r
 	return user
 }
 
+// loginUserForTest is a helper to log in.
+// It now correctly unmarshals the new TokenPair response and returns only the access token for use in subsequent API calls.
 func loginUserForTest(t *testing.T, email, password string) string {
 	requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
 	req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
@@ -117,10 +120,11 @@ func loginUserForTest(t *testing.T, email, password string) string {
 	testApp.Router.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code, "Login request should be successful")
 
-	var response service.TokenPair
+	var response service.TokenPair // Use the actual TokenPair struct for unmarshaling.
 	err := json.Unmarshal(rr.Body.Bytes(), &response)
 	assert.NoError(t, err, "Should be able to unmarshal login response")
 
+	// We are now looking for "access_token", not "token".
 	assert.NotEmpty(t, response.AccessToken, "Access Token should not be empty on successful login")
 	return response.AccessToken
 }
@@ -279,7 +283,7 @@ func TestAuthFlows_Integration(t *testing.T) {
 	assert.NoError(t, err)
 	initialAccessToken := loginResponse.AccessToken
 
-	// --- DİKKATLİ OL: Jetonların aynı saniyede üretilmesini önlemek için 1 saniye bekle ---
+	// --- To prevent flaky tests, wait for 1 second to ensure the next token's timestamp is different ---
 	time.Sleep(1 * time.Second)
 
 	// --- Test 1: Successful Token Refresh ---
