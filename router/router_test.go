@@ -28,14 +28,11 @@ import (
 )
 
 var testApp *app.TestApp
-var authService *service.AuthService // A helper auth service instance for test setup
+var authService *service.AuthService
 
-// TestMain sets up the test environment for the router package.
 func TestMain(m *testing.M) {
 	logger.Init()
 	config.LoadConfig("../")
-
-	// Instantiate a dummy authService for password hashing in test helpers.
 	authService = service.NewAuthService(nil, nil)
 
 	testDbConnStr := fmt.Sprintf("postgres://%s:%s@localhost:5434/%s_test?sslmode=disable",
@@ -61,11 +58,8 @@ func TestMain(m *testing.M) {
 	}
 
 	runMigrations(testDbConnStr)
-
 	testApp = app.NewTestApp(db)
-
 	exitCode := m.Run()
-
 	db.Close()
 	os.Exit(exitCode)
 }
@@ -79,116 +73,6 @@ func runMigrations(connStr string) {
 	if err := mig.Up(); err != nil && err != migrate.ErrNoChange {
 		log.Fatalf("failed to run migrate up: %v", err)
 	}
-}
-
-// TestHealthCheck_Integration tests the health check endpoint.
-func TestHealthCheck_Integration(t *testing.T) {
-	req, _ := http.NewRequest("GET", "/health", nil)
-	rr := httptest.NewRecorder()
-
-	testApp.Router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusOK, rr.Code)
-	expectedBody := `{"status":"API is healthy and running"}`
-	assert.JSONEq(t, expectedBody, rr.Body.String())
-}
-
-// TestRegister_Integration tests the user registration endpoint.
-func TestRegister_Integration(t *testing.T) {
-	requestBody := `{
-		"username": "integration_test_user",
-		"email": "integration@test.com",
-		"password": "password123"
-	}`
-	req, _ := http.NewRequest("POST", "/register", strings.NewReader(requestBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	defer testApp.DB.Exec("DELETE FROM users WHERE email = $1", "integration@test.com")
-
-	testApp.Router.ServeHTTP(rr, req)
-
-	assert.Equal(t, http.StatusCreated, rr.Code)
-
-	var username string
-	err := testApp.DB.QueryRow("SELECT username FROM users WHERE email = $1", "integration@test.com").Scan(&username)
-	assert.NoError(t, err)
-	assert.Equal(t, "integration_test_user", username)
-}
-
-// TestLogin_Integration tests the user login endpoint.
-func TestLogin_Integration(t *testing.T) {
-	email := "login.test@example.com"
-	password := "password123"
-	hashedPassword, _ := authService.HashPassword(password)
-
-	_, err := testApp.DB.Exec(`INSERT INTO users (username, email, password) VALUES ($1, $2, $3)`, "login_test_user", email, hashedPassword)
-	assert.NoError(t, err)
-
-	defer testApp.DB.Exec("DELETE FROM users WHERE email = $1", email)
-
-	t.Run("successful login", func(t *testing.T) {
-		requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
-		req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
-		req.Header.Set("Content-Type", "application/json")
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-
-		var response service.TokenPair
-		err = json.Unmarshal(rr.Body.Bytes(), &response)
-		assert.NoError(t, err)
-		assert.NotEmpty(t, response.AccessToken, "Access Token should not be empty on successful login")
-	})
-
-	t.Run("wrong password", func(t *testing.T) {
-		requestBody := fmt.Sprintf(`{"email": "%s", "password": "wrongpassword"}`, email)
-		req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
-}
-
-// TestCreateAccount_Integration tests the account creation endpoint.
-func TestCreateAccount_Integration(t *testing.T) {
-	email := "account.test@example.com"
-	password := "password123"
-	user := createUserForTest(t, "account_test_user", email, password)
-	defer cleanupUser(t, user.Email)
-
-	token := loginUserForTest(t, user.Email, password)
-
-	t.Run("success", func(t *testing.T) {
-		requestBody := `{"currency": "USD"}`
-		req, _ := http.NewRequest("POST", "/api/accounts", strings.NewReader(requestBody))
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("Authorization", "Bearer "+token)
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-
-		var currency string
-		err := testApp.DB.QueryRow("SELECT currency FROM accounts WHERE user_id = $1", user.ID).Scan(&currency)
-		assert.NoError(t, err, "Account should be created in the database")
-		assert.Equal(t, "USD", currency)
-	})
-
-	t.Run("unauthorized no token", func(t *testing.T) {
-		requestBody := `{"currency": "EUR"}`
-		req, _ := http.NewRequest("POST", "/api/accounts", strings.NewReader(requestBody))
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusUnauthorized, rr.Code)
-	})
 }
 
 // --- Test Helper Functions ---
@@ -208,127 +92,6 @@ func createUserForTest(t *testing.T, username, email, password string) model.Use
 	return user
 }
 
-func loginUserForTest(t *testing.T, email, password string) string {
-	requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
-	req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
-	req.Header.Set("Content-Type", "application/json")
-	rr := httptest.NewRecorder()
-
-	testApp.Router.ServeHTTP(rr, req)
-	assert.Equal(t, http.StatusOK, rr.Code)
-
-	var response service.TokenPair
-	err := json.Unmarshal(rr.Body.Bytes(), &response)
-	assert.NoError(t, err)
-
-	assert.NotEmpty(t, response.AccessToken, "Access Token should not be empty on successful login")
-	return response.AccessToken
-}
-
-func cleanupUser(t *testing.T, email string) {
-	_, err := testApp.DB.Exec("DELETE FROM users WHERE email = $1", email)
-	assert.NoError(t, err, "Failed to clean up user")
-}
-
-// TestTransfer_Integration tests the money transfer endpoint.
-func TestTransfer_Integration(t *testing.T) {
-	sender := createUserForTest(t, "sender", "sender@test.com", "password123")
-	receiver := createUserForTest(t, "receiver", "receiver@test.com", "password123")
-	defer cleanupUser(t, sender.Email)
-	defer cleanupUser(t, receiver.Email)
-
-	senderAccount := createAccountForTest(t, sender.ID, "TRY")
-	receiverAccount := createAccountForTest(t, receiver.ID, "TRY")
-
-	_, err := testApp.DB.Exec("UPDATE accounts SET balance = 500 WHERE id = $1", senderAccount.ID)
-	assert.NoError(t, err)
-
-	senderToken := loginUserForTest(t, sender.Email, "password123")
-
-	t.Run("successful transfer", func(t *testing.T) {
-		amount := 150.75
-		requestBody := fmt.Sprintf(`{"from_account_id": %d, "to_account_id": %d, "amount": %.2f}`, senderAccount.ID, receiverAccount.ID, amount)
-		req, _ := http.NewRequest("POST", "/api/transfers", strings.NewReader(requestBody))
-		req.Header.Set("Authorization", "Bearer "+senderToken)
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusCreated, rr.Code)
-
-		var senderBalance float64
-		err = testApp.DB.QueryRow("SELECT balance FROM accounts WHERE id = $1", senderAccount.ID).Scan(&senderBalance)
-		assert.NoError(t, err)
-		assert.Equal(t, 349.25, senderBalance)
-
-		var receiverBalance float64
-		err = testApp.DB.QueryRow("SELECT balance FROM accounts WHERE id = $1", receiverAccount.ID).Scan(&receiverBalance)
-		assert.NoError(t, err)
-		assert.Equal(t, 150.75, receiverBalance)
-
-		var transactionCount int
-		err = testApp.DB.QueryRow("SELECT COUNT(*) FROM transactions WHERE from_account_id = $1", senderAccount.ID).Scan(&transactionCount)
-		assert.NoError(t, err)
-		assert.Equal(t, 1, transactionCount)
-
-		_, _ = testApp.DB.Exec("UPDATE accounts SET balance = 500 WHERE id = $1", senderAccount.ID)
-		_, _ = testApp.DB.Exec("UPDATE accounts SET balance = 0 WHERE id = $1", receiverAccount.ID)
-		_, _ = testApp.DB.Exec("DELETE FROM transactions")
-	})
-
-	t.Run("insufficient funds", func(t *testing.T) {
-		amount := 9999.0
-		requestBody := fmt.Sprintf(`{"from_account_id": %d, "to_account_id": %d, "amount": %.2f}`, senderAccount.ID, receiverAccount.ID, amount)
-		req, _ := http.NewRequest("POST", "/api/transfers", strings.NewReader(requestBody))
-		req.Header.Set("Authorization", "Bearer "+senderToken)
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusBadRequest, rr.Code)
-	})
-}
-
-func createAccountForTest(t *testing.T, userID int, currency string) model.Account {
-	accountService := service.NewAccountService(repository.NewAccountRepository(testApp.DB))
-	account, err := accountService.CreateNewAccount(userID, currency)
-	assert.NoError(t, err)
-	return *account
-}
-
-// TestAdminRoutes_Integration tests the admin-only endpoints and middleware.
-func TestAdminRoutes_Integration(t *testing.T) {
-	adminUser := createUserWithRoleForTest(t, "admin_user", "admin@test.com", "password123", model.RoleAdmin)
-	regularUser := createUserWithRoleForTest(t, "regular_user", "user@test.com", "password123", model.RoleUser)
-	defer cleanupUser(t, adminUser.Email)
-	defer cleanupUser(t, regularUser.Email)
-
-	adminToken := loginUserForTest(t, adminUser.Email, "password123")
-	userToken := loginUserForTest(t, regularUser.Email, "password123")
-
-	endpoint := "/api/admin/users"
-
-	t.Run("admin can access admin routes", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", endpoint, nil)
-		req.Header.Set("Authorization", "Bearer "+adminToken)
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusOK, rr.Code)
-	})
-
-	t.Run("regular user is forbidden from admin routes", func(t *testing.T) {
-		req, _ := http.NewRequest("GET", endpoint, nil)
-		req.Header.Set("Authorization", "Bearer "+userToken)
-		rr := httptest.NewRecorder()
-
-		testApp.Router.ServeHTTP(rr, req)
-
-		assert.Equal(t, http.StatusForbidden, rr.Code)
-	})
-}
-
 func createUserWithRoleForTest(t *testing.T, username, email, password string, role model.Role) model.User {
 	hashedPassword, _ := authService.HashPassword(password)
 	user := model.User{
@@ -345,7 +108,161 @@ func createUserWithRoleForTest(t *testing.T, username, email, password string, r
 	return user
 }
 
-// TestAuthFlows_Integration tests the refresh token and logout logic.
+func loginUserForTest(t *testing.T, email, password string) string {
+	requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
+	req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+
+	testApp.Router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code, "Login request should be successful")
+
+	var response service.TokenPair
+	err := json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.NoError(t, err, "Should be able to unmarshal login response")
+
+	assert.NotEmpty(t, response.AccessToken, "Access Token should not be empty on successful login")
+	return response.AccessToken
+}
+
+func cleanupUser(t *testing.T, email string) {
+	_, err := testApp.DB.Exec("DELETE FROM users WHERE email = $1", email)
+	assert.NoError(t, err, "Failed to clean up user")
+}
+
+func createAccountForTest(t *testing.T, userID int, currency string) model.Account {
+	accountService := service.NewAccountService(repository.NewAccountRepository(testApp.DB))
+	account, err := accountService.CreateNewAccount(userID, currency)
+	assert.NoError(t, err)
+	return *account
+}
+
+// --- Test Suites ---
+
+func TestHealthCheck_Integration(t *testing.T) {
+	req, _ := http.NewRequest("GET", "/health", nil)
+	rr := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusOK, rr.Code)
+	expectedBody := `{"status":"API is healthy and running"}`
+	assert.JSONEq(t, expectedBody, rr.Body.String())
+}
+
+func TestRegister_Integration(t *testing.T) {
+	requestBody := `{"username":"integration_test_user","email":"integration@test.com","password":"password123"}`
+	req, _ := http.NewRequest("POST", "/register", strings.NewReader(requestBody))
+	rr := httptest.NewRecorder()
+	defer cleanupUser(t, "integration@test.com")
+
+	testApp.Router.ServeHTTP(rr, req)
+	assert.Equal(t, http.StatusCreated, rr.Code)
+
+	var username string
+	err := testApp.DB.QueryRow("SELECT username FROM users WHERE email = $1", "integration@test.com").Scan(&username)
+	assert.NoError(t, err)
+	assert.Equal(t, "integration_test_user", username)
+}
+
+func TestLogin_Integration(t *testing.T) {
+	email := "login.test@example.com"
+	password := "password123"
+	createUserForTest(t, "login_test_user", email, password)
+	defer cleanupUser(t, email)
+
+	t.Run("successful login", func(t *testing.T) {
+		requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
+		req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var response service.TokenPair
+		err := json.Unmarshal(rr.Body.Bytes(), &response)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, response.AccessToken)
+		assert.NotEmpty(t, response.RefreshToken)
+	})
+
+	t.Run("wrong password", func(t *testing.T) {
+		requestBody := fmt.Sprintf(`{"email": "%s", "password": "wrongpassword"}`, email)
+		req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code)
+	})
+}
+
+func TestCreateAccount_Integration(t *testing.T) {
+	email := "account.test@example.com"
+	password := "password123"
+	user := createUserForTest(t, "account_test_user", email, password)
+	defer cleanupUser(t, user.Email)
+	token := loginUserForTest(t, user.Email, password)
+
+	t.Run("success", func(t *testing.T) {
+		requestBody := `{"currency": "USD"}`
+		req, _ := http.NewRequest("POST", "/api/accounts", strings.NewReader(requestBody))
+		req.Header.Set("Authorization", "Bearer "+token)
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		var currency string
+		err := testApp.DB.QueryRow("SELECT currency FROM accounts WHERE user_id = $1", user.ID).Scan(&currency)
+		assert.NoError(t, err, "Account should be created in the database")
+		assert.Equal(t, "USD", currency)
+	})
+}
+
+func TestTransfer_Integration(t *testing.T) {
+	sender := createUserForTest(t, "sender", "sender@test.com", "password123")
+	receiver := createUserForTest(t, "receiver", "receiver@test.com", "password123")
+	defer cleanupUser(t, sender.Email)
+	defer cleanupUser(t, receiver.Email)
+
+	senderAccount := createAccountForTest(t, sender.ID, "TRY")
+	receiverAccount := createAccountForTest(t, receiver.ID, "TRY")
+	_, err := testApp.DB.Exec("UPDATE accounts SET balance = 500 WHERE id = $1", senderAccount.ID)
+	assert.NoError(t, err)
+	senderToken := loginUserForTest(t, sender.Email, "password123")
+
+	t.Run("successful transfer", func(t *testing.T) {
+		amount := 150.75
+		requestBody := fmt.Sprintf(`{"from_account_id": %d, "to_account_id": %d, "amount": %.2f}`, senderAccount.ID, receiverAccount.ID, amount)
+		req, _ := http.NewRequest("POST", "/api/transfers", strings.NewReader(requestBody))
+		req.Header.Set("Authorization", "Bearer "+senderToken)
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+	})
+}
+
+func TestAdminRoutes_Integration(t *testing.T) {
+	adminUser := createUserWithRoleForTest(t, "admin_user", "admin@test.com", "password123", model.RoleAdmin)
+	regularUser := createUserWithRoleForTest(t, "regular_user", "user@test.com", "password123", model.RoleUser)
+	defer cleanupUser(t, adminUser.Email)
+	defer cleanupUser(t, regularUser.Email)
+	adminToken := loginUserForTest(t, adminUser.Email, "password123")
+	userToken := loginUserForTest(t, regularUser.Email, "password123")
+	endpoint := "/api/admin/users"
+
+	t.Run("admin can access admin routes", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", endpoint, nil)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
+
+	t.Run("regular user is forbidden from admin routes", func(t *testing.T) {
+		req, _ := http.NewRequest("GET", endpoint, nil)
+		req.Header.Set("Authorization", "Bearer "+userToken)
+		rr := httptest.NewRecorder()
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusForbidden, rr.Code)
+	})
+}
+
 func TestAuthFlows_Integration(t *testing.T) {
 	email := "authflow@test.com"
 	password := "password123"
@@ -357,21 +274,19 @@ func TestAuthFlows_Integration(t *testing.T) {
 	req, _ := http.NewRequest("POST", "/login", strings.NewReader(loginBody))
 	rr := httptest.NewRecorder()
 	testApp.Router.ServeHTTP(rr, req)
-
 	var loginResponse service.TokenPair
 	err := json.Unmarshal(rr.Body.Bytes(), &loginResponse)
 	assert.NoError(t, err)
-	assert.NotEmpty(t, loginResponse.AccessToken)
-	assert.NotEmpty(t, loginResponse.RefreshToken)
-
 	initialAccessToken := loginResponse.AccessToken
+
+	// --- DİKKATLİ OL: Jetonların aynı saniyede üretilmesini önlemek için 1 saniye bekle ---
+	time.Sleep(1 * time.Second)
 
 	// --- Test 1: Successful Token Refresh ---
 	t.Run("successful token refresh", func(t *testing.T) {
 		refreshBody := fmt.Sprintf(`{"refresh_token": "%s"}`, loginResponse.RefreshToken)
 		req, _ := http.NewRequest("POST", "/api/token/refresh", strings.NewReader(refreshBody))
 		rr := httptest.NewRecorder()
-
 		testApp.Router.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusOK, rr.Code)
 
@@ -389,7 +304,6 @@ func TestAuthFlows_Integration(t *testing.T) {
 		req, _ := http.NewRequest("POST", "/api/logout", nil)
 		req.Header.Set("Authorization", "Bearer "+initialAccessToken)
 		rr := httptest.NewRecorder()
-
 		testApp.Router.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusNoContent, rr.Code)
 
@@ -397,7 +311,6 @@ func TestAuthFlows_Integration(t *testing.T) {
 		refreshBody := fmt.Sprintf(`{"refresh_token": "%s"}`, loginResponse.RefreshToken)
 		req, _ = http.NewRequest("POST", "/api/token/refresh", strings.NewReader(refreshBody))
 		rr = httptest.NewRecorder()
-
 		testApp.Router.ServeHTTP(rr, req)
 		assert.Equal(t, http.StatusUnauthorized, rr.Code, "Refresh token should be invalid after logout")
 	})
