@@ -1,4 +1,5 @@
-// router/router_test.go
+// file: router/router_test.go
+
 package router_test
 
 import (
@@ -27,11 +28,15 @@ import (
 )
 
 var testApp *app.TestApp
+var authService *service.AuthService // A helper auth service instance for test setup
 
 // TestMain sets up the test environment for the router package.
 func TestMain(m *testing.M) {
 	logger.Init()
 	config.LoadConfig("../")
+
+	// Instantiate a dummy authService for password hashing in test helpers.
+	authService = service.NewAuthService(nil, nil)
 
 	testDbConnStr := fmt.Sprintf("postgres://%s:%s@localhost:5434/%s_test?sslmode=disable",
 		config.AppConfig.Database.User,
@@ -121,12 +126,11 @@ func TestLogin_Integration(t *testing.T) {
 	// Setup: Create a user directly in the database to test against.
 	email := "login.test@example.com"
 	password := "password123"
-	hashedPassword, _ := service.HashPassword(password)
+	hashedPassword, _ := authService.HashPassword(password)
 
 	_, err := testApp.DB.Exec(`INSERT INTO users (username, email, password) VALUES ($1, $2, $3)`, "login_test_user", email, hashedPassword)
 	assert.NoError(t, err)
 
-	// Teardown: ensure the test user is removed after the test.
 	defer testApp.DB.Exec("DELETE FROM users WHERE email = $1", email)
 
 	t.Run("successful login", func(t *testing.T) {
@@ -211,7 +215,7 @@ func TestCreateAccount_Integration(t *testing.T) {
 
 // createUserForTest is a helper to create a user and return the model.
 func createUserForTest(t *testing.T, username, email, password string) model.User {
-	hashedPassword, _ := service.HashPassword(password)
+	hashedPassword, _ := authService.HashPassword(password)
 	user := model.User{
 		Username: username,
 		Email:    email,
@@ -376,7 +380,7 @@ func TestAdminRoutes_Integration(t *testing.T) {
 
 // createUserWithRoleForTest is a helper to create a user with a specific role.
 func createUserWithRoleForTest(t *testing.T, username, email, password string, role model.Role) model.User {
-	hashedPassword, _ := service.HashPassword(password)
+	hashedPassword, _ := authService.HashPassword(password)
 	user := model.User{
 		Username: username,
 		Email:    email,
