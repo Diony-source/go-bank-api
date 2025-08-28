@@ -21,7 +21,7 @@ import (
 type UserHandler struct {
 	userRepo    repository.IUserRepository
 	userService *service.UserService
-	authService *service.AuthService // <-- NEW DEPENDENCY
+	authService *service.AuthService
 }
 
 // NewUserHandler creates a new UserHandler with its dependencies.
@@ -54,7 +54,6 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 	log := logger.Log.WithFields(logrus.Fields{"username": req.Username, "email": req.Email})
 	log.Info("User registration attempt started")
 
-	// Hashing logic is now encapsulated within AuthService.
 	hashedPassword, err := h.authService.HashPassword(req.Password)
 	if err != nil {
 		return common.NewAppError(http.StatusInternalServerError, "Could not process request", err)
@@ -66,14 +65,13 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 		Password: hashedPassword,
 	}
 
-	// The repository interface for user creation is now used.
 	if err := h.userRepo.CreateUser(user); err != nil {
 		return common.NewAppError(http.StatusInternalServerError, "Could not create user", err)
 	}
 
 	log.WithField("user_id", user.ID).Info("User registered successfully")
 	w.WriteHeader(http.StatusCreated)
-	user.Password = "" // Ensure password is not returned.
+	user.Password = ""
 	json.NewEncoder(w).Encode(user)
 
 	return nil
@@ -86,7 +84,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.A
 // @Accept       json
 // @Produce      json
 // @Param        credentials body model.LoginRequest true "User Credentials"
-// @Success      200  {object}  map[string]string "{"token": "..."}"
+// @Success      200  {object}  service.TokenPair
 // @Failure      400  {object}  common.AppError "Invalid request body"
 // @Failure      401  {object}  common.AppError "Invalid email or password"
 // @Failure      500  {object}  common.AppError "Internal server error"
@@ -100,19 +98,69 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) *common.AppE
 	log := logger.Log.WithField("email", req.Email)
 	log.Info("User login attempt started")
 
-	// All authentication and token generation logic is now delegated to the AuthService.
 	tokenPair, err := h.authService.AuthenticateUser(req.Email, req.Password)
 	if err != nil {
-		// AuthService returns a generic error for security, which we map to Unauthorized.
 		return common.NewAppError(http.StatusUnauthorized, "Invalid email or password", err)
 	}
 
 	log.Info("User logged in successfully, token pair generated")
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	// The response now includes both access and refresh tokens.
 	json.NewEncoder(w).Encode(tokenPair)
 
+	return nil
+}
+
+// RefreshToken godoc
+// @Summary      Refresh access token
+// @Description  Provides a new access token using a valid refresh token.
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        request body object{refresh_token=string} true "Refresh Token"
+// @Success      200  {object}  object{access_token=string}
+// @Failure      400  {object}  common.AppError "Invalid request body"
+// @Failure      401  {object}  common.AppError "Invalid or expired refresh token"
+// @Router       /api/token/refresh [post]
+func (h *UserHandler) RefreshToken(w http.ResponseWriter, r *http.Request) *common.AppError {
+	var req struct {
+		RefreshToken string `json:"refresh_token" validate:"required"`
+	}
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
+	}
+
+	newAccessToken, err := h.authService.RefreshAccessToken(req.RefreshToken)
+	if err != nil {
+		return common.NewAppError(http.StatusUnauthorized, err.Error(), err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(map[string]string{"access_token": newAccessToken})
+	return nil
+}
+
+// Logout godoc
+// @Summary      User logout
+// @Description  Invalidates the user's session by deleting their refresh token.
+// @Tags         auth
+// @Security     BearerAuth
+// @Success      204  "No Content"
+// @Failure      401  {object}  common.AppError "Unauthorized"
+// @Failure      500  {object}  common.AppError "Internal server error"
+// @Router       /api/logout [post]
+func (h *UserHandler) Logout(w http.ResponseWriter, r *http.Request) *common.AppError {
+	userID, ok := r.Context().Value(UserIDKey).(int)
+	if !ok {
+		return common.NewAppError(http.StatusUnauthorized, "Invalid user ID in token", nil)
+	}
+
+	if err := h.authService.LogoutUser(userID); err != nil {
+		return common.NewAppError(http.StatusInternalServerError, "Could not log out", err)
+	}
+
+	w.WriteHeader(http.StatusNoContent)
 	return nil
 }
 

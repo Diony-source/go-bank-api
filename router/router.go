@@ -1,3 +1,5 @@
+// file: router/router.go
+
 package router
 
 import (
@@ -13,16 +15,18 @@ import (
 func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.AccountHandler, transactionHandler *handler.TransactionHandler) http.Handler {
 	mux := http.NewServeMux()
 
-	// Public routes
+	// --- Public Routes ---
 	mux.Handle("POST /register", handler.ErrorHandlingMiddleware(userHandler.Register))
 	mux.Handle("POST /login", handler.ErrorHandlingMiddleware(userHandler.Login))
+	mux.Handle("POST /api/token/refresh", handler.ErrorHandlingMiddleware(userHandler.RefreshToken))
 
-	// Authenticated routes
+	// --- Authenticated Routes (Requires a valid Access Token) ---
+	mux.Handle("POST /api/logout", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(userHandler.Logout)))
 	mux.Handle("GET /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.ListAccounts)))
 	mux.Handle("POST /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)))
 	mux.Handle("POST /api/transfers", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(transactionHandler.CreateTransfer)))
 
-	// Admin-only routes
+	// --- Admin-only Routes (Requires Admin Role) ---
 	mux.Handle("GET /api/admin/users", handler.AuthMiddleware(handler.AdminMiddleware(handler.ErrorHandlingMiddleware(userHandler.GetAllUsers))))
 	mux.Handle("PATCH /api/admin/users/{id}/role",
 		handler.AuthMiddleware(
@@ -39,11 +43,8 @@ func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.Account
 		),
 	)
 
-	// Health Check
+	// --- Health & Documentation ---
 	mux.HandleFunc("GET /health", handler.HealthCheck)
-
-	// Swagger docs route. WrapHandler serves the Swagger UI.
-	// It automatically finds the generated 'doc.json' file.
 	mux.Handle("GET /swagger/", httpSwagger.WrapHandler)
 
 	return mux

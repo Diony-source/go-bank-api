@@ -1,3 +1,5 @@
+// file: repository/user_repository.go
+
 package repository
 
 import (
@@ -12,6 +14,7 @@ import (
 type IUserRepository interface {
 	CreateUser(user *model.User) error
 	GetUserByEmail(email string) (*model.User, error)
+	GetUserByID(id int) (*model.User, error) // <-- EKLENEN ARAYÜZ METODU
 	GetAllUsers() ([]*model.User, error)
 	UpdateUserRole(userID int, newRole string) error
 }
@@ -52,6 +55,23 @@ func (r *UserRepository) GetUserByEmail(email string) (*model.User, error) {
 			log.Info("User not found in database")
 		} else {
 			log.WithError(err).Error("Failed to execute get user by email query")
+		}
+		return nil, err
+	}
+	return user, nil
+}
+
+// GetUserByID retrieves a user by their primary key ID.
+func (r *UserRepository) GetUserByID(id int) (*model.User, error) {
+	log := logger.Log.WithField("user_id", id)
+	log.Info("Executing query to get user by ID")
+
+	user := &model.User{}
+	query := `SELECT id, username, email, password, role, created_at FROM users WHERE id=$1`
+	err := r.DB.QueryRow(query, id).Scan(&user.ID, &user.Username, &user.Email, &user.Password, &user.Role, &user.CreatedAt)
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.WithError(err).Error("Failed to execute get user by ID query")
 		}
 		return nil, err
 	}
@@ -105,7 +125,6 @@ func (r *UserRepository) UpdateUserRole(userID int, newRole string) error {
 	}
 
 	if rowsAffected == 0 {
-		// This means no user with the given ID was found.
 		return sql.ErrNoRows
 	}
 

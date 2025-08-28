@@ -116,22 +116,18 @@ func (s *AuthService) AuthenticateUser(email, password string) (*TokenPair, erro
 		return nil, errors.New("invalid credentials")
 	}
 
-	// Generate the access token
 	accessToken, err := s.generateAccessToken(user)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate access token: %w", err)
 	}
 
-	// Generate the refresh token
 	refreshTokenString, refreshToken, err := s.generateRefreshToken(user.ID)
 	if err != nil {
 		return nil, fmt.Errorf("could not generate refresh token: %w", err)
 	}
 
-	// Clean up old tokens and store the new one
 	if err := s.tokenRepo.DeleteByUserID(user.ID); err != nil {
 		logger.Log.WithError(err).WithField("user_id", user.ID).Warn("Failed to delete old refresh tokens for user")
-		// We can proceed even if this fails, but it should be logged.
 	}
 	if err := s.tokenRepo.Create(refreshToken); err != nil {
 		return nil, fmt.Errorf("could not store refresh token: %w", err)
@@ -141,4 +137,40 @@ func (s *AuthService) AuthenticateUser(email, password string) (*TokenPair, erro
 		AccessToken:  accessToken,
 		RefreshToken: refreshTokenString,
 	}, nil
+}
+
+// RefreshAccessToken validates a refresh token and issues a new access token if valid.
+func (s *AuthService) RefreshAccessToken(refreshTokenString string) (string, error) {
+	hash := sha256.Sum256([]byte(refreshTokenString))
+	tokenHash := base64.URLEncoding.EncodeToString(hash[:])
+
+	refreshToken, err := s.tokenRepo.GetByTokenHash(tokenHash)
+	if err != nil {
+		return "", errors.New("invalid refresh token")
+	}
+
+	if time.Now().After(refreshToken.ExpiresAt) {
+		return "", errors.New("expired refresh token")
+	}
+
+	user, err := s.userRepo.GetUserByID(refreshToken.UserID)
+	if err != nil {
+		return "", errors.New("user not found for token")
+	}
+
+	newAccessToken, err := s.generateAccessToken(user)
+	if err != nil {
+		return "", fmt.Errorf("could not generate new access token: %w", err)
+	}
+
+	return newAccessToken, nil
+}
+
+// LogoutUser invalidates a user's session by deleting their refresh tokens.
+func (s *AuthService) LogoutUser(userID int) error {
+	if err := s.tokenRepo.DeleteByUserID(userID); err != nil {
+		logger.Log.WithError(err).WithField("user_id", userID).Error("Failed to delete refresh tokens during logout")
+		return fmt.Errorf("could not log out: %w", err)
+	}
+	return nil
 }

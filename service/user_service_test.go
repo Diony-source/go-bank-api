@@ -1,4 +1,5 @@
-// service/user_service_test.go
+// file: service/user_service_test.go
+
 package service
 
 import (
@@ -18,6 +19,9 @@ func (m *mockUserRepo) CreateUser(user *model.User) error {
 }
 func (m *mockUserRepo) GetUserByEmail(email string) (*model.User, error) {
 	args := m.Called(email)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*model.User), args.Error(1)
 }
 func (m *mockUserRepo) GetAllUsers() ([]*model.User, error) {
@@ -27,6 +31,15 @@ func (m *mockUserRepo) GetAllUsers() ([]*model.User, error) {
 func (m *mockUserRepo) UpdateUserRole(userID int, newRole string) error {
 	args := m.Called(userID, newRole)
 	return args.Error(0)
+}
+
+// GetUserByID is added to satisfy the IUserRepository interface.
+func (m *mockUserRepo) GetUserByID(id int) (*model.User, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.User), args.Error(1)
 }
 
 func TestUserService_UpdateUserRole(t *testing.T) {
