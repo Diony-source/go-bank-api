@@ -1,72 +1,58 @@
 # file: .github/workflows/ci.yml
 
-# This name will appear in the GitHub Actions UI.
 name: Go Bank API CI
 
-# Controls when the workflow will run.
 on:
-  # Triggers the workflow on push events but only for the "main" branch.
   push:
     branches: [ "main" ]
-  # Triggers the workflow on pull request events but only for the "main" branch.
   pull_request:
     branches: [ "main" ]
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel.
 jobs:
-  # This workflow contains a single job called "test".
   test:
-    # The type of runner that the job will run on.
     runs-on: ubuntu-latest
 
-    # Services are Docker containers that provide a way to create and use services
-    # that are needed for the duration of a job.
+    # Set job-level environment variables from secrets.
+    # This is a robust way to make secrets available throughout the job.
+    env:
+      POSTGRES_USER: ${{ secrets.DB_USER }}
+      POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+      JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+
     services:
-      # This defines a service container for PostgreSQL.
       postgres:
-        # The Docker image to use for the service.
         image: postgres:15-alpine
-        # Environment variables to set in the container. These are used by PostgreSQL to initialize the database.
+        # Use the job-level environment variables defined above.
         env:
-          # We use GitHub Secrets to avoid hardcoding sensitive credentials.
-          POSTGRES_USER: ${{ secrets.DB_USER }}
-          POSTGRES_PASSWORD: ${{ secrets.DB_PASSWORD }}
+          POSTGRES_USER: ${{ env.POSTGRES_USER }}
+          POSTGRES_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
           POSTGRES_DB: go_bank_api_test
-        # Maps a port on the host runner (5434) to a port in the container (5432).
         ports:
           - 5434:5432
-        # Options to pass to the container's create command. The health check ensures
-        # that tests do not start until the database is ready to accept connections.
         options: >-
-          --health-cmd "pg_isready -U ${{ secrets.DB_USER }} -d go_bank_api_test"
+          --health-cmd "pg_isready -U ${{ env.POSTGRES_USER }} -d go_bank_api_test"
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
     
-    # A job contains a sequence of tasks called steps. Steps can run commands or use actions.
     steps:
-      # Step 1: Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it.
       - name: Checkout code
         uses: actions/checkout@v4
 
-      # Step 2: Sets up a Go environment by downloading and configuring the specified version.
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
           go-version: '1.24.3'
 
-      # Step 3: Runs the test suite.
       - name: Run tests
-        # Sets environment variables for this step. These are used by the Go application
-        # during the test run to connect to the services.
+        # The test step also uses the job-level environment variables.
+        # Note that the DB_HOST for a service container is localhost on the mapped port.
         env:
-          # The host for the service container is 'localhost' because GitHub Actions maps the service's ports to the host runner.
           DB_HOST: localhost
           DB_PORT: 5434
-          DB_USER: ${{ secrets.DB_USER }}
-          DB_PASSWORD: ${{ secrets.DB_PASSWORD }}
-          DB_NAME: go_bank_api # The test code appends '_test' to this name.
-          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
+          DB_USER: ${{ env.POSTGRES_USER }}
+          DB_PASSWORD: ${{ env.POSTGRES_PASSWORD }}
+          DB_NAME: go_bank_api 
+          JWT_SECRET_KEY: ${{ env.JWT_SECRET_KEY }}
           PORT: 8080
-        # The command to execute. The '-v' flag provides verbose output.
         run: go test -v ./...
