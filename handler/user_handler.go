@@ -25,7 +25,17 @@ func NewUserHandler(repo *repository.UserRepository, service *service.UserServic
 	return &UserHandler{Repo: repo, Service: service}
 }
 
-// Register handles the user registration request.
+// Register godoc
+// @Summary      Register a new user
+// @Description  Creates a new user account
+// @Tags         auth
+// @Accept       json
+// @Produce      json
+// @Param        user body model.RegisterRequest true "User Registration Info"
+// @Success      201  {object}  model.User
+// @Failure      400  {object}  common.AppError
+// @Failure      500  {object}  common.AppError
+// @Router       /register [post]
 func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req model.RegisterRequest
 	if err := common.ValidateAndDecode(r, &req); err != nil {
