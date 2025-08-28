@@ -42,10 +42,6 @@ jobs:
       - name: Generate docs
         run: swag init -g cmd/main.go
 
-      # NEW STEP: Create a dummy config file for the integration tests.
-      # The test suite's TestMain function expects a config.yml file to exist.
-      # The values here are placeholders; the actual configuration for the test run
-      # is provided by the environment variables below.
       - name: Create config file for tests
         run: |
           echo "database:" > config.yml
@@ -61,11 +57,13 @@ jobs:
 
       - name: Run tests
         env:
-          DB_HOST: localhost
-          DB_PORT: 5434
-          DB_USER: user_test
-          DB_PASSWORD: password_test
-          DB_NAME: go_bank_api 
+          # CORRECTED: Use env var names that Viper's AutomaticEnv can map to the config struct.
+          # e.g., DATABASE_USER maps to config.Database.User
+          DATABASE_HOST: localhost
+          DATABASE_PORT: 5434
+          DATABASE_USER: user_test
+          DATABASE_PASSWORD: password_test
+          DATABASE_NAME: go_bank_api
+          SERVER_PORT: 8080
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
-          PORT: 8080
         run: go test -v ./...
