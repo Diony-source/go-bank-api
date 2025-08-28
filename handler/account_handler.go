@@ -20,7 +20,19 @@ func NewAccountHandler(service *service.AccountService) *AccountHandler {
 	return &AccountHandler{service: service}
 }
 
-// CreateAccount handles the request to create a new bank account.
+// CreateAccount godoc
+// @Summary      Create a new bank account
+// @Description  Creates a new bank account for the authenticated user. Supported currencies: TRY, USD, EUR.
+// @Tags         accounts
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        request body object{currency=string} true "Account Creation Request with currency"
+// @Success      201  {object}  model.Account
+// @Failure      400  {object}  common.AppError "Invalid request body or unsupported currency"
+// @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
+// @Failure      500  {object}  common.AppError "Internal server error while creating account"
+// @Router       /api/accounts [post]
 func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) *common.AppError {
 	var req struct {
 		Currency string `json:"currency" validate:"required,oneof=TRY USD EUR"`
@@ -52,7 +64,16 @@ func (h *AccountHandler) CreateAccount(w http.ResponseWriter, r *http.Request) *
 	return nil
 }
 
-// ListAccounts lists the accounts for the currently authenticated user.
+// ListAccounts godoc
+// @Summary      List user's accounts
+// @Description  Retrieves a list of bank accounts for the currently authenticated user.
+// @Tags         accounts
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.Account
+// @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
+// @Failure      500  {object}  common.AppError "Internal server error while retrieving accounts"
+// @Router       /api/accounts [get]
 func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *common.AppError {
 	userID, ok := r.Context().Value(UserIDKey).(int)
 	if !ok {
@@ -74,7 +95,17 @@ func (h *AccountHandler) ListAccounts(w http.ResponseWriter, r *http.Request) *c
 	return nil
 }
 
-// GetAllAccounts lists all accounts in the system. Admin only.
+// GetAllAccounts godoc
+// @Summary      Get all accounts (Admin)
+// @Description  Retrieves a list of all bank accounts in the system. Admin access required.
+// @Tags         admin
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200  {array}   model.Account
+// @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
+// @Failure      403  {object}  common.AppError "Forbidden: User does not have admin privileges"
+// @Failure      500  {object}  common.AppError "Internal server error while retrieving all accounts"
+// @Router       /api/admin/accounts [get]
 func (h *AccountHandler) GetAllAccounts(w http.ResponseWriter, r *http.Request) *common.AppError {
 	adminID, _ := r.Context().Value(UserIDKey).(int)
 	log := logger.Log.WithField("admin_user_id", adminID)
