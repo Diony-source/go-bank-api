@@ -30,7 +30,6 @@ import (
 var testApp *app.TestApp
 var authService *service.AuthService
 
-// TestMain sets up the test environment for the router package.
 func TestMain(m *testing.M) {
 	logger.Init()
 	config.LoadConfig("../")
