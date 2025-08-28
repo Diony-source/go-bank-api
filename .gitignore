@@ -30,3 +30,9 @@ main
 # ----------------- #
 # Docker database data
 postgres_data/
+
+# ----------------- #
+# GENERATED CODE
+# ----------------- #
+# Swagger documentation files
+/docs
