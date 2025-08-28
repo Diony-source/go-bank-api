@@ -36,17 +36,29 @@ jobs:
         with:
           go-version: '1.24.3'
 
-      # NEW STEP: Install Swag CLI
-      # The swag binary is required to generate the documentation files.
       - name: Install Swag
         run: go install github.com/swaggo/swag/cmd/swag@latest
 
-      # NEW STEP: Generate Swagger docs
-      # This step creates the 'docs' directory that our code needs to compile.
       - name: Generate docs
         run: swag init -g cmd/main.go
 
-      # FINAL STEP: Run the tests
+      # NEW STEP: Create a dummy config file for the integration tests.
+      # The test suite's TestMain function expects a config.yml file to exist.
+      # The values here are placeholders; the actual configuration for the test run
+      # is provided by the environment variables below.
+      - name: Create config file for tests
+        run: |
+          echo "database:" > config.yml
+          echo "  host: \"db\"" >> config.yml
+          echo "  port: 5432" >> config.yml
+          echo "  user: \"postgres\"" >> config.yml
+          echo "  password: \"password\"" >> config.yml
+          echo "  name: \"go_bank_api\"" >> config.yml
+          echo "server:" >> config.yml
+          echo "  port: \"8080\"" >> config.yml
+          echo "jwt:" >> config.yml
+          echo "  secret_key: \"secret\"" >> config.yml
+
       - name: Run tests
         env:
           DB_HOST: localhost
