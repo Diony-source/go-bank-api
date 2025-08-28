@@ -42,28 +42,24 @@ jobs:
       - name: Generate docs
         run: swag init -g cmd/main.go
 
+      # CORRECTED STEP: Create a dummy config file with credentials matching the test database service.
       - name: Create config file for tests
         run: |
           echo "database:" > config.yml
-          echo "  host: \"db\"" >> config.yml
-          echo "  port: 5432" >> config.yml
-          echo "  user: \"postgres\"" >> config.yml
-          echo "  password: \"password\"" >> config.yml
+          echo "  host: \"localhost\"" >> config.yml
+          echo "  port: 5434" >> config.yml
+          echo "  user: \"user_test\"" >> config.yml
+          echo "  password: \"password_test\"" >> config.yml
           echo "  name: \"go_bank_api\"" >> config.yml
           echo "server:" >> config.yml
           echo "  port: \"8080\"" >> config.yml
           echo "jwt:" >> config.yml
-          echo "  secret_key: \"secret\"" >> config.yml
+          echo "  secret_key: \"${{ secrets.JWT_SECRET_KEY }}\"" >> config.yml
 
       - name: Run tests
+        # Env variables are still useful for other potential tools, but the primary config
+        # now comes from the generated config.yml, ensuring consistency.
         env:
-          # CORRECTED: Use env var names that Viper's AutomaticEnv can map to the config struct.
-          # e.g., DATABASE_USER maps to config.Database.User
-          DATABASE_HOST: localhost
-          DATABASE_PORT: 5434
-          DATABASE_USER: user_test
-          DATABASE_PASSWORD: password_test
-          DATABASE_NAME: go_bank_api
-          SERVER_PORT: 8080
+          # We only need to provide the secret key here now.
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         run: go test -v ./...
