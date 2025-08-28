@@ -36,16 +36,24 @@ jobs:
         with:
           go-version: '1.24.3'
 
+      # NEW STEP: Install Swag CLI
+      # The swag binary is required to generate the documentation files.
+      - name: Install Swag
+        run: go install github.com/swaggo/swag/cmd/swag@latest
+
+      # NEW STEP: Generate Swagger docs
+      # This step creates the 'docs' directory that our code needs to compile.
+      - name: Generate docs
+        run: swag init -g cmd/main.go
+
+      # FINAL STEP: Run the tests
       - name: Run tests
-        # Environment variables for the test step.
-        # We use the static credentials defined in the 'services' block above.
-        # This is secure because this environment is ephemeral and destroyed after the job.
         env:
           DB_HOST: localhost
           DB_PORT: 5434
           DB_USER: user_test
           DB_PASSWORD: password_test
           DB_NAME: go_bank_api 
-          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }} # JWT Secret is still loaded securely.
+          JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
           PORT: 8080
         run: go test -v ./...
