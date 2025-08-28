@@ -42,10 +42,9 @@ func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.Account
 	// Health Check
 	mux.HandleFunc("GET /health", handler.HealthCheck)
 
-	// Swagger docs route
-	mux.HandleFunc("GET /swagger/*", httpSwagger.Handler(
-		httpSwagger.URL("http://localhost:8080/swagger/doc.json"),
-	))
+	// Swagger docs route. WrapHandler serves the Swagger UI.
+	// It automatically finds the generated 'doc.json' file.
+	mux.Handle("GET /swagger/", httpSwagger.WrapHandler)
 
 	return mux
 }
