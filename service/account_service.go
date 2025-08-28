@@ -5,8 +5,6 @@ import (
 	"errors"
 	"go-bank-api/model"
 	"go-bank-api/repository"
-	"math/rand"
-	"time"
 )
 
 type AccountService struct {
@@ -18,18 +16,22 @@ func NewAccountService(repo repository.IAccountRepository) *AccountService {
 }
 
 // CreateNewAccount creates a new account using the repository.
+// It now generates a sequential and unique account number.
 func (s *AccountService) CreateNewAccount(userID int, currency string) (*model.Account, error) {
-	// Note: For production, a more robust account number generation is needed.
-	rand.Seed(time.Now().UnixNano())
-	accountNumber := int64(rand.Intn(9000000000) + 1000000000)
+	lastAccountNumber, err := s.repo.GetLastAccountNumber()
+	if err != nil {
+		return nil, err
+	}
+
+	newAccountNumber := lastAccountNumber + 1
 
 	account := &model.Account{
 		UserID:        userID,
-		AccountNumber: accountNumber,
+		AccountNumber: newAccountNumber,
 		Currency:      currency,
 	}
 
-	err := s.repo.CreateAccount(account)
+	err = s.repo.CreateAccount(account)
 	if err != nil {
 		return nil, err
 	}

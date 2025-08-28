@@ -17,6 +17,7 @@ type IAccountRepository interface {
 	GetAccountForUpdate(tx *sql.Tx, accountID int) (*model.Account, error)
 	UpdateAccountBalance(tx *sql.Tx, accountID int, newBalance float64) error
 	DepositToAccount(accountID int, amount float64) (*model.Account, error)
+	GetLastAccountNumber() (int, error)
 }
 
 // AccountRepository implements IAccountRepository.
@@ -168,4 +169,26 @@ func (r *AccountRepository) DepositToAccount(accountID int, amount float64) (*mo
 
 	log.Info("Funds deposited successfully")
 	return &updatedAccount, nil
+}
+
+// GetLastAccountNumber retrieves the highest account number from the database.
+func (r *AccountRepository) GetLastAccountNumber() (int64, error) {
+	log := logger.Log
+	log.Info("Executing query to get the last account number")
+
+	var lastAccountNumber sql.NullInt64 // Use sql.NullInt64 to handle the case where the table is empty.
+	query := `SELECT MAX(account_number) FROM accounts`
+	err := r.DB.QueryRow(query).Scan(&lastAccountNumber)
+
+	if err != nil {
+		log.WithError(err).Error("Failed to execute query for the last account number")
+		return 0, err
+	}
+
+	if !lastAccountNumber.Valid {
+		// No accounts exist yet, so we can start from a base number.
+		return 1000000000, nil // Start from a fixed number
+	}
+
+	return lastAccountNumber.Int64, nil
 }
