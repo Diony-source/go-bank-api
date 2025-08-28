@@ -1,4 +1,5 @@
-// service/transaction_service_test.go
+// file: service/transaction_service_test.go
+
 package service
 
 import (
@@ -41,7 +42,14 @@ func (m *MockAccountRepository) UpdateAccountBalance(tx *sql.Tx, id int, bal flo
 	return args.Error(0)
 }
 
-// Unused methods needed to satisfy the interface
+// GetLastAccountNumber is added to satisfy the IAccountRepository interface contract.
+// It's not used in this test suite, so a simple implementation is sufficient.
+func (m *MockAccountRepository) GetLastAccountNumber() (int64, error) {
+	args := m.Called()
+	return 0, args.Error(1) // Return zero value and a potential error
+}
+
+// --- Unused methods that are required to satisfy the interface contract ---
 func (m *MockAccountRepository) CreateAccount(*model.Account) error                { return nil }
 func (m *MockAccountRepository) GetAccountsByUserID(int) ([]*model.Account, error) { return nil, nil }
 func (m *MockAccountRepository) GetAllAccounts() ([]*model.Account, error)         { return nil, nil }
