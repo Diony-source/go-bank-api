@@ -14,7 +14,7 @@ import (
 type IUserRepository interface {
 	CreateUser(user *model.User) error
 	GetUserByEmail(email string) (*model.User, error)
-	GetUserByID(id int) (*model.User, error) // <-- EKLENEN ARAYÜZ METODU
+	GetUserByID(id int) (*model.User, error)
 	GetAllUsers() ([]*model.User, error)
 	UpdateUserRole(userID int, newRole string) error
 }

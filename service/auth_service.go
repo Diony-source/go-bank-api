@@ -82,30 +82,25 @@ func (s *AuthService) generateAccessToken(user *model.User) (string, error) {
 
 // generateRefreshToken creates a new long-lived, cryptographically secure refresh token.
 func (s *AuthService) generateRefreshToken(userID int) (string, *model.RefreshToken, error) {
-	// 1. Generate a random, secure token string
 	randomBytes := make([]byte, 32)
 	if _, err := rand.Read(randomBytes); err != nil {
 		return "", nil, fmt.Errorf("failed to generate random bytes for refresh token: %w", err)
 	}
 	tokenString := base64.URLEncoding.EncodeToString(randomBytes)
 
-	// 2. Hash the token string for database storage
 	hash := sha256.Sum256([]byte(tokenString))
 	tokenHash := base64.URLEncoding.EncodeToString(hash[:])
 
-	// 3. Create the model for the database
 	refreshToken := &model.RefreshToken{
 		UserID:    userID,
 		TokenHash: tokenHash,
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour), // Long-lived (7 days)
 	}
 
-	// The raw token string is returned to the user, the hashed version is stored.
 	return tokenString, refreshToken, nil
 }
 
 // AuthenticateUser validates user credentials and generates a new token pair.
-// It also cleans up any old refresh tokens and stores the new one.
 func (s *AuthService) AuthenticateUser(email, password string) (*TokenPair, error) {
 	user, err := s.userRepo.GetUserByEmail(email)
 	if err != nil {
