@@ -92,9 +92,13 @@ type TestApp struct {
 
 // NewTestApp initializes the application for testing without starting the server.
 func NewTestApp(db *sql.DB) *TestApp {
+	// --- Dependency Injection for Test Environment ---
 	userRepo := repository.NewUserRepository(db)
+	tokenRepo := repository.NewTokenRepository(db)
+
+	authService := service.NewAuthService(userRepo, tokenRepo)
 	userService := service.NewUserService(userRepo)
-	userHandler := handler.NewUserHandler(userRepo, userService)
+	userHandler := handler.NewUserHandler(userRepo, userService, authService)
 
 	accountRepo := repository.NewAccountRepository(db)
 	accountService := service.NewAccountService(accountRepo)

@@ -390,3 +390,66 @@ func createUserWithRoleForTest(t *testing.T, username, email, password string, r
 	assert.NoError(t, err)
 	return user
 }
+
+// TestAuthFlows_Integration tests the refresh token and logout logic.
+func TestAuthFlows_Integration(t *testing.T) {
+	// --- Setup ---
+	email := "authflow@test.com"
+	password := "password123"
+	user := createUserForTest(t, "authflow_user", email, password)
+	defer cleanupUser(t, user.Email)
+
+	// 1. Login to get initial token pair
+	loginBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
+	req, _ := http.NewRequest("POST", "/login", strings.NewReader(loginBody))
+	rr := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(rr, req)
+
+	var loginResponse struct {
+		AccessToken  string `json:"access_token"`
+		RefreshToken string `json:"refresh_token"`
+	}
+	err := json.Unmarshal(rr.Body.Bytes(), &loginResponse)
+	assert.NoError(t, err)
+	assert.NotEmpty(t, loginResponse.AccessToken)
+	assert.NotEmpty(t, loginResponse.RefreshToken)
+
+	initialAccessToken := loginResponse.AccessToken
+
+	// --- Test 1: Successful Token Refresh ---
+	t.Run("successful token refresh", func(t *testing.T) {
+		refreshBody := fmt.Sprintf(`{"refresh_token": "%s"}`, loginResponse.RefreshToken)
+		req, _ := http.NewRequest("POST", "/api/token/refresh", strings.NewReader(refreshBody))
+		rr := httptest.NewRecorder()
+
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusOK, rr.Code)
+
+		var refreshResponse struct {
+			AccessToken string `json:"access_token"`
+		}
+		err := json.Unmarshal(rr.Body.Bytes(), &refreshResponse)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, refreshResponse.AccessToken)
+		assert.NotEqual(t, initialAccessToken, refreshResponse.AccessToken, "New access token should be different")
+	})
+
+	// --- Test 2: Logout ---
+	t.Run("successful logout", func(t *testing.T) {
+		// Use the valid access token to logout
+		req, _ := http.NewRequest("POST", "/api/logout", nil)
+		req.Header.Set("Authorization", "Bearer "+initialAccessToken)
+		rr := httptest.NewRecorder()
+
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusNoContent, rr.Code)
+
+		// Verify refresh token is now invalid
+		refreshBody := fmt.Sprintf(`{"refresh_token": "%s"}`, loginResponse.RefreshToken)
+		req, _ = http.NewRequest("POST", "/api/token/refresh", strings.NewReader(refreshBody))
+		rr = httptest.NewRecorder()
+
+		testApp.Router.ServeHTTP(rr, req)
+		assert.Equal(t, http.StatusUnauthorized, rr.Code, "Refresh token should be invalid after logout")
+	})
+}
