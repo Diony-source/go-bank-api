@@ -229,7 +229,8 @@ func createUserForTest(t *testing.T, username, email, password string) model.Use
 	return user
 }
 
-// loginUserForTest is a helper to log in and return a JWT token.
+// loginUserForTest is a helper to log in.
+// It now correctly unmarshals the new TokenPair response and returns only the access token for use in subsequent API calls.
 func loginUserForTest(t *testing.T, email, password string) string {
 	requestBody := fmt.Sprintf(`{"email": "%s", "password": "%s"}`, email, password)
 	req, _ := http.NewRequest("POST", "/login", strings.NewReader(requestBody))
@@ -239,12 +240,13 @@ func loginUserForTest(t *testing.T, email, password string) string {
 	testApp.Router.ServeHTTP(rr, req)
 	assert.Equal(t, http.StatusOK, rr.Code)
 
-	var response map[string]string
+	var response service.TokenPair // Use the actual TokenPair struct for unmarshaling.
 	err := json.Unmarshal(rr.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	token, ok := response["token"]
-	assert.True(t, ok, "Token should be in the login response")
-	return token
+
+	// We are now looking for "access_token", not "token".
+	assert.NotEmpty(t, response.AccessToken, "Access Token should not be empty on successful login")
+	return response.AccessToken
 }
 
 // cleanupUser is a helper to delete a user after a test.
