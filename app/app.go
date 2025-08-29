@@ -51,7 +51,7 @@ func Run() {
 	userHandler := handler.NewUserHandler(userRepo, userService, authService)
 
 	accountRepo := repository.NewAccountRepository(database)
-	accountService := service.NewAccountService(accountRepo)
+	accountService := service.NewAccountService(accountRepo, redisClient)
 	accountHandler := handler.NewAccountHandler(accountService)
 
 	transactionRepo := repository.NewTransactionRepository(database)
