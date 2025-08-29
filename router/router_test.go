@@ -21,9 +21,9 @@ import (
 	"testing"
 	"time"
 
-	_ "github.com.br/golang-migrate/migrate/v4/source/file"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file" // CORRECTED IMPORT PATH
 	_ "github.com/lib/pq"
 	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
@@ -60,18 +60,16 @@ func TestMain(m *testing.M) {
 	runMigrations(testDbConnStr)
 
 	// --- Redis Connection for Integration Tests ---
-	// Use a different database number (e.g., 1) for tests to isolate from dev data.
 	redisAddr := fmt.Sprintf("%s:%s", config.AppConfig.Redis.Host, config.AppConfig.Redis.Port)
 	testRedisClient = redis.NewClient(&redis.Options{
 		Addr:     redisAddr,
 		Password: config.AppConfig.Redis.Password,
-		DB:       1, // Test-specific Redis DB.
+		DB:       1, // Use a separate DB for test isolation.
 	})
 	if _, err := testRedisClient.Ping(context.Background()).Result(); err != nil {
 		log.Fatalf("could not connect to test redis: %v", err)
 	}
 
-	// FIX: Pass the redis client to the test application constructor.
 	testApp = app.NewTestApp(db, testRedisClient)
 
 	// --- Run Tests ---
@@ -96,7 +94,6 @@ func runMigrations(connStr string) {
 
 // --- Test Helper Functions ---
 
-// clearRedis flushes the test Redis database to ensure test isolation.
 func clearRedis(t *testing.T) {
 	err := testRedisClient.FlushDB(context.Background()).Err()
 	assert.NoError(t, err)
@@ -153,7 +150,6 @@ func cleanupUser(t *testing.T, email string) {
 }
 
 func createAccountForTest(t *testing.T, userID int, currency string) model.Account {
-	// FIX: The temporary AccountService must also be initialized with the test Redis client.
 	accountService := service.NewAccountService(repository.NewAccountRepository(testApp.DB), testRedisClient)
 	account, err := accountService.CreateNewAccount(userID, currency)
 	assert.NoError(t, err)
@@ -211,9 +207,7 @@ func TestLogin_Integration(t *testing.T) {
 }
 
 func TestCreateAccount_Integration(t *testing.T) {
-	// Setup for cache test: ensure Redis is clean before this test runs.
 	clearRedis(t)
-
 	email := "account.test@example.com"
 	password := "password123"
 	user := createUserForTest(t, "account_test_user", email, password)
@@ -234,17 +228,14 @@ func TestCreateAccount_Integration(t *testing.T) {
 	})
 }
 
-// NEW TEST: Verify caching behavior at the integration level.
 func TestListAccounts_Caching_Integration(t *testing.T) {
 	clearRedis(t)
 	user := createUserForTest(t, "cache_user", "cache@test.com", "password123")
 	defer cleanupUser(t, user.Email)
 	token := loginUserForTest(t, user.Email, "password123")
-
-	// Create an account to be cached.
 	createAccountForTest(t, user.ID, "EUR")
 
-	// 1. First request: Should be a CACHE MISS. Data is fetched from DB and cached.
+	// 1. First request: Should be a CACHE MISS.
 	req, _ := http.NewRequest("GET", "/api/accounts", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 	rr := httptest.NewRecorder()
