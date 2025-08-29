@@ -26,7 +26,19 @@ jobs:
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
-    
+
+      # FIX: Add a Redis service for the integration tests.
+      redis:
+        image: redis:7-alpine
+        ports:
+          # The tests connect to localhost:6379, so we map this port.
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -42,7 +54,6 @@ jobs:
       - name: Generate docs
         run: swag init -g cmd/main.go
 
-      # CORRECTED STEP: Create a dummy config file with credentials matching the test database service.
       - name: Create config file for tests
         run: |
           echo "database:" > config.yml
@@ -51,6 +62,11 @@ jobs:
           echo "  user: \"user_test\"" >> config.yml
           echo "  password: \"password_test\"" >> config.yml
           echo "  name: \"go_bank_api\"" >> config.yml
+          # FIX: Add Redis configuration for the test environment.
+          echo "redis:" >> config.yml
+          echo "  host: \"localhost\"" >> config.yml
+          echo "  port: \"6379\"" >> config.yml
+          echo "  password: \"\"" >> config.yml
           echo "server:" >> config.yml
           echo "  port: \"8080\"" >> config.yml
           echo "jwt:" >> config.yml
@@ -58,7 +74,5 @@ jobs:
 
       - name: Run tests
         env:
-          # The JWT secret is still passed as an env var for Viper to pick it up,
-          # as it's not ideal to write secrets to files, even temporary ones.
           JWT_SECRET_KEY: ${{ secrets.JWT_SECRET_KEY }}
         run: go test -v ./...
