@@ -44,14 +44,16 @@ func (s *AccountService) CreateNewAccount(userID int, currency string) (*model.A
 	}
 
 	// First, try to save the account to the database.
+	// This is the source of truth; the cache is just a reflection.
 	err = s.repo.CreateAccount(account)
 	if err != nil {
 		return nil, err
 	}
 
-	// If saving is successful, invalidate the cache for this user.
+	// If the database write is successful, we must invalidate the cache.
+	// This ensures that the next read will fetch the fresh, complete list of accounts.
 	cacheKey := fmt.Sprintf("accounts:%d", userID)
-	s.redisClient.Del(context.Background(), cacheKey)
+	s.redisClient.Del(context.Background(), cacheKey) // Fire-and-forget invalidation.
 
 	return account, nil
 }
@@ -61,25 +63,31 @@ func (s *AccountService) ListAccountsForUser(userID int) ([]*model.Account, erro
 	cacheKey := fmt.Sprintf("accounts:%d", userID)
 	ctx := context.Background()
 
-	// 1. Try to get data from Redis.
+	// 1. Attempt to fetch from the cache first. This is the "fast path".
 	cachedAccounts, err := s.redisClient.Get(ctx, cacheKey).Result()
 	if err == nil {
-		// Cache hit.
+		// Cache hit. Deserialize and return immediately.
+		// Avoids a costly database roundtrip.
 		var accounts []*model.Account
 		if err := json.Unmarshal([]byte(cachedAccounts), &accounts); err == nil {
 			return accounts, nil
 		}
+		// If unmarshalling fails, we'll treat it as a cache miss and proceed to the database.
 	}
 
-	// 2. Cache miss. Fetch from the database.
+	// 2. Cache miss. The data is not in the cache or is corrupted.
+	// Fetch the canonical data from the database (the "source of truth").
 	accounts, err := s.repo.GetAccountsByUserID(userID)
 	if err != nil {
 		return nil, err
 	}
 
-	// 3. Store the result in Redis for future requests.
+	// 3. Populate the cache. Serialize the fresh data and store it in Redis.
+	// The next request for this user will now hit the cache.
 	data, err := json.Marshal(accounts)
 	if err == nil {
+		// We set an expiration to prevent stale data from living forever.
+		// 10 minutes is a reasonable TTL for this kind of data.
 		s.redisClient.Set(ctx, cacheKey, data, 10*time.Minute)
 	}
 
@@ -97,5 +105,6 @@ func (s *AccountService) DepositToAccount(accountID int, amount float64) (*model
 		return nil, errors.New("deposit amount must be positive")
 	}
 	// NOTE: For a complete solution, this should also invalidate the user's account cache.
+	// This is a good candidate for a future enhancement.
 	return s.repo.DepositToAccount(accountID, amount)
 }
