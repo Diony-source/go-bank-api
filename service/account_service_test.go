@@ -72,22 +72,36 @@ func (m *mockRedisClient) Del(ctx context.Context, keys ...string) *redis.IntCmd
 
 // --- Test Suites ---
 
-func TestAccountService_CreateNewAccount_WithCacheInvalidation(t *testing.T) {
+func TestAccountService_CreateNewAccount(t *testing.T) {
 	mockRepo := new(mockAccountRepoForAccountSvc)
 	mockRedis := new(mockRedisClient)
+	// FIX: The AccountService constructor requires a valid Redis client.
+	// We pass the mock Redis client directly. Its embedded `redis.Client` field
+	// is nil, but our mock methods (Get, Set, Del) will intercept calls.
 	accountService := NewAccountService(mockRepo, &mockRedis.Client)
 
 	userID := 1
+	currency := "TRY"
+	lastAccountNumber := int64(1000000025)
 	cacheKey := fmt.Sprintf("accounts:%d", userID)
 
-	mockRepo.On("GetLastAccountNumber").Return(int64(1000000025), nil).Once()
-	mockRepo.On("CreateAccount", mock.Anything).Return(nil).Once()
-	// VERIFY: A successful DB write must trigger a cache invalidation for the user.
+	// --- Expectations ---
+	// 1. Verify correct account number generation.
+	mockRepo.On("GetLastAccountNumber").Return(lastAccountNumber, nil).Once()
+	expectedNewAccountNumber := lastAccountNumber + 1
+	mockRepo.On("CreateAccount", mock.MatchedBy(func(acc *model.Account) bool {
+		return acc.AccountNumber == expectedNewAccountNumber && acc.UserID == userID
+	})).Return(nil).Once()
+	// 2. VERIFY: A successful DB write must trigger a cache invalidation.
 	mockRedis.On("Del", mock.Anything, cacheKey).Return().Once()
 
-	_, err := accountService.CreateNewAccount(userID, "TRY")
+	// --- Execution ---
+	account, err := accountService.CreateNewAccount(userID, currency)
 
+	// --- Assertions ---
 	assert.NoError(t, err)
+	assert.NotNil(t, account)
+	assert.Equal(t, expectedNewAccountNumber, account.AccountNumber)
 	mockRepo.AssertExpectations(t)
 	mockRedis.AssertExpectations(t)
 }
@@ -139,33 +153,11 @@ func TestAccountService_ListAccountsForUser_CacheMiss(t *testing.T) {
 	mockRedis.AssertExpectations(t)
 }
 
-// Note: The following are original, non-cache related tests. Kept for regression.
-func TestAccountService_CreateNewAccount(t *testing.T) {
-	mockRepo := new(mockAccountRepoForAccountSvc)
-	accountService := NewAccountService(mockRepo, nil) // Caching not relevant here.
-
-	userID := 1
-	currency := "TRY"
-	lastAccountNumber := int64(1000000025)
-
-	mockRepo.On("GetLastAccountNumber").Return(lastAccountNumber, nil).Once()
-
-	expectedNewAccountNumber := lastAccountNumber + 1
-	mockRepo.On("CreateAccount", mock.MatchedBy(func(acc *model.Account) bool {
-		return acc.AccountNumber == expectedNewAccountNumber && acc.UserID == userID
-	})).Return(nil).Once()
-
-	account, err := accountService.CreateNewAccount(userID, currency)
-
-	assert.NoError(t, err)
-	assert.NotNil(t, account)
-	assert.Equal(t, expectedNewAccountNumber, account.AccountNumber)
-	mockRepo.AssertExpectations(t)
-}
-
 func TestAccountService_DepositToAccount(t *testing.T) {
 	mockRepo := new(mockAccountRepoForAccountSvc)
-	accountService := NewAccountService(mockRepo, nil) // Caching not relevant here.
+	mockRedis := new(mockRedisClient)
+	// FIX: Always provide a valid, non-nil client, even if no calls are expected.
+	accountService := NewAccountService(mockRepo, &mockRedis.Client)
 
 	t.Run("success", func(t *testing.T) {
 		accountID := 1
