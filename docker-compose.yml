@@ -29,9 +29,9 @@ services:
       - "127.0.0.1:5434:5432" # Test DB on a different host port
     restart: always
 
-  # Redis service for caching
+ # Redis service for caching.
   redis:
-    image: redis:7-alphine
+    image: redis:7-alpine # CORRECTED: 'alpine' not 'alphine'
     container_name: go-bank-api-redis
     ports:
       - "127.0.0.1:6379:6379"
