@@ -31,6 +31,13 @@ func Run() {
 	}
 	defer database.Close()
 
+	// Establish connection to Redis.
+	redisClient, err := db.ConnectRedis()
+	if err != nil {
+		logger.Log.Fatalf("Error connecting to Redis: %v", err)
+	}
+	defer redisClient.Close()
+
 	// --- Dependency Injection ---
 	userRepo := repository.NewUserRepository(database)
 	tokenRepo := repository.NewTokenRepository(database)
