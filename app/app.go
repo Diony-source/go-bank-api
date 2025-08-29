@@ -16,6 +16,8 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
 // Run initializes and starts the application.
@@ -31,7 +33,6 @@ func Run() {
 	}
 	defer database.Close()
 
-	// Establish connection to Redis.
 	redisClient, err := db.ConnectRedis()
 	if err != nil {
 		logger.Log.Fatalf("Error connecting to Redis: %v", err)
@@ -42,12 +43,8 @@ func Run() {
 	userRepo := repository.NewUserRepository(database)
 	tokenRepo := repository.NewTokenRepository(database)
 
-	// The old, stateless service functions are now part of AuthService.
-	// We'll need to update the handlers to use this new service.
 	authService := service.NewAuthService(userRepo, tokenRepo)
-
 	userService := service.NewUserService(userRepo)
-	// Pass authService to userHandler where authentication logic is needed.
 	userHandler := handler.NewUserHandler(userRepo, userService, authService)
 
 	accountRepo := repository.NewAccountRepository(database)
@@ -67,7 +64,6 @@ func Run() {
 		Handler: r,
 	}
 
-	// Start server in a goroutine to allow for graceful shutdown.
 	go func() {
 		logger.Log.Infof("Server starting on port :%s", port)
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -75,7 +71,6 @@ func Run() {
 		}
 	}()
 
-	// Wait for interrupt signal for graceful shutdown.
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 	<-quit
@@ -93,13 +88,14 @@ func Run() {
 
 // TestApp holds dependencies for a test instance of the application.
 type TestApp struct {
-	Router http.Handler
-	DB     *sql.DB
+	Router      http.Handler
+	DB          *sql.DB
+	RedisClient *redis.Client // Mock client for test isolation.
 }
 
 // NewTestApp initializes the application for testing without starting the server.
-func NewTestApp(db *sql.DB) *TestApp {
-	// --- Dependency Injection for Test Environment ---
+// It accepts mockable dependencies for isolated testing.
+func NewTestApp(db *sql.DB, redisClient *redis.Client) *TestApp {
 	userRepo := repository.NewUserRepository(db)
 	tokenRepo := repository.NewTokenRepository(db)
 
@@ -108,7 +104,8 @@ func NewTestApp(db *sql.DB) *TestApp {
 	userHandler := handler.NewUserHandler(userRepo, userService, authService)
 
 	accountRepo := repository.NewAccountRepository(db)
-	accountService := service.NewAccountService(accountRepo)
+	// Inject the provided Redis client (real or mock) into the service layer.
+	accountService := service.NewAccountService(accountRepo, redisClient)
 	accountHandler := handler.NewAccountHandler(accountService)
 
 	transactionRepo := repository.NewTransactionRepository(db)
@@ -118,7 +115,8 @@ func NewTestApp(db *sql.DB) *TestApp {
 	r := router.NewRouter(userHandler, accountHandler, transactionHandler)
 
 	return &TestApp{
-		Router: r,
-		DB:     db,
+		Router:      r,
+		DB:          db,
+		RedisClient: redisClient,
 	}
 }
