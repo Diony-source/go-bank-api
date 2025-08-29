@@ -14,9 +14,18 @@ type Config struct {
 		Password string `mapstructure:"password"`
 		Name     string `mapstructure:"name"`
 	} `mapstructure:"database"`
+
+	// Redis holds the connection details for the caching service.
+	Redis struct {
+		Host     string `mapstructure:"host"`
+		Port     string `mapstructure:"port"`
+		Password string `mapstructure:"password"`
+	} `mapstructure:"redis"`
+
 	Server struct {
 		Port string `mapstructure:"port"`
 	} `mapstructure:"server"`
+
 	JWT struct {
 		SecretKey string `mapstructure:"secret_key"`
 	} `mapstructure:"jwt"`
