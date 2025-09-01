@@ -67,24 +67,19 @@ func (m *MockTransactionRepository) GetTransactionsByAccountID(id int) ([]*model
 }
 
 func TestTransactionService_TransferMoney(t *testing.T) {
-	// Setup
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
 
 	mockAccountRepo := new(MockAccountRepository)
 	mockTxnRepo := new(MockTransactionRepository)
-
 	transactionService := NewTransactionService(db, mockAccountRepo, mockTxnRepo)
 
 	ctx := context.Background()
 	userID := 1
-
-	// REFACTOR: fromAccountID is now a distinct variable, not part of the request struct.
 	fromAccountID := 1
 	toAccountID := 2
 
-	// REFACTOR: The request struct no longer contains FromAccountID.
 	req := TransferRequest{
 		ToAccountID: toAccountID,
 		Amount:      100.0,
@@ -93,9 +88,7 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 	fromAccount := &model.Account{ID: fromAccountID, UserID: userID, Balance: 500.0, Currency: "TRY"}
 	toAccount := &model.Account{ID: toAccountID, UserID: 2, Balance: 200.0, Currency: "TRY"}
 
-	// --- Test Case 1: Successful Transfer ---
 	t.Run("success", func(t *testing.T) {
-		// Expectations
 		dbMock.ExpectBegin()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, fromAccountID).Return(fromAccount, nil).Once()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.ToAccountID).Return(toAccount, nil).Once()
@@ -104,11 +97,8 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 		mockTxnRepo.On("CreateTransaction", mock.Anything, mock.AnythingOfType("*model.Transaction")).Return(nil).Once()
 		dbMock.ExpectCommit()
 
-		// Execution
-		// REFACTOR: Call the service with the new 4-argument signature.
 		_, err := transactionService.TransferMoney(ctx, userID, fromAccountID, req)
 
-		// Assertions
 		assert.NoError(t, err)
 		mockAccountRepo.AssertExpectations(t)
 		mockTxnRepo.AssertExpectations(t)

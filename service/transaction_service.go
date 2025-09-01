@@ -43,6 +43,7 @@ type TransferRequest struct {
 	Amount      float64 `json:"amount" validate:"required,gt=0"`
 }
 
+// TransferMoney now accepts fromAccountID directly, making the function signature more explicit and aligned with the new endpoint design.
 func (s *TransactionService) TransferMoney(ctx context.Context, userID, fromAccountID int, req TransferRequest) (*model.Transaction, error) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"from_account_id": fromAccountID,
@@ -121,14 +122,12 @@ func (s *TransactionService) TransferMoney(ctx context.Context, userID, fromAcco
 	return transaction, nil
 }
 
-// ListTransactionsForAccount retrieves the transaction history for a specific account.
 func (s *TransactionService) ListTransactionsForAccount(ctx context.Context, userID, accountID int) ([]*model.Transaction, error) {
 	log := logger.Log.WithFields(logrus.Fields{
 		"requesting_user_id": userID,
 		"target_account_id":  accountID,
 	})
 
-	// Authorization check: User must own the account.
 	account, err := s.accountRepo.GetAccountByID(accountID)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -142,6 +141,5 @@ func (s *TransactionService) ListTransactionsForAccount(ctx context.Context, use
 		return nil, ErrPermissionDenied
 	}
 
-	// Authorization passed. Now, fetch the history.
 	return s.transactionRepo.GetTransactionsByAccountID(accountID)
 }

@@ -35,29 +35,24 @@ func NewTransactionHandler(s *service.TransactionService) *TransactionHandler {
 // @Failure      500  {object}  common.AppError "Internal server error while processing transfer"
 // @Router       /api/accounts/{fromAccountId}/transfers [post]
 func (h *TransactionHandler) CreateTransfer(w http.ResponseWriter, r *http.Request) *common.AppError {
-	// Extract user ID from token.
 	userID, ok := r.Context().Value(UserIDKey).(int)
 	if !ok {
 		return common.NewAppError(http.StatusUnauthorized, "Invalid user ID in token", nil)
 	}
 
-	// Extract 'from' account ID from the URL path. This is more RESTful and secure.
 	fromAccountIDStr := r.PathValue("fromAccountId")
 	fromAccountID, err := strconv.Atoi(fromAccountIDStr)
 	if err != nil {
 		return common.NewAppError(http.StatusBadRequest, "Invalid source account ID in URL path", err)
 	}
 
-	// Decode the request body (which now only contains 'to_account_id' and 'amount').
 	var req service.TransferRequest
 	if err := common.ValidateAndDecode(r, &req); err != nil {
 		return err
 	}
 
-	// Call the updated service method.
 	transaction, err := h.service.TransferMoney(r.Context(), userID, fromAccountID, req)
 	if err != nil {
-		// Map specific business logic errors to appropriate HTTP status codes.
 		switch err {
 		case service.ErrSenderAccountNotFound, service.ErrReceiverAccountNotFound:
 			return common.NewAppError(http.StatusNotFound, err.Error(), err)
