@@ -19,32 +19,43 @@ func NewTransactionHandler(s *service.TransactionService) *TransactionHandler {
 }
 
 // CreateTransfer godoc
-// @Summary      Transfer money between accounts
-// @Description  Handles the transfer of a specified amount from one account to another. The user must own the 'from' account.
+// @Summary      Transfer money from a specific account
+// @Description  Handles the transfer of a specified amount from a specific account to another. The user must own the 'from' account.
 // @Tags         transactions
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        transfer body service.TransferRequest true "Details of the financial transfer"
+// @Param        fromAccountId path int true "The ID of the account to transfer funds from"
+// @Param        transfer body service.TransferRequest true "Details of the financial transfer (to_account_id, amount)"
 // @Success      201  {object}  model.Transaction
-// @Failure      400  {object}  common.AppError "Bad Request (e.g., insufficient funds, currency mismatch, invalid amount)"
+// @Failure      400  {object}  common.AppError "Bad Request (e.g., invalid ID, insufficient funds, etc.)"
 // @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
 // @Failure      403  {object}  common.AppError "Forbidden: User does not own the source account"
 // @Failure      404  {object}  common.AppError "Sender or receiver account not found"
 // @Failure      500  {object}  common.AppError "Internal server error while processing transfer"
-// @Router       /api/transfers [post]
+// @Router       /api/accounts/{fromAccountId}/transfers [post]
 func (h *TransactionHandler) CreateTransfer(w http.ResponseWriter, r *http.Request) *common.AppError {
-	var req service.TransferRequest
-	if err := common.ValidateAndDecode(r, &req); err != nil {
-		return err
-	}
-
+	// Extract user ID from token.
 	userID, ok := r.Context().Value(UserIDKey).(int)
 	if !ok {
 		return common.NewAppError(http.StatusUnauthorized, "Invalid user ID in token", nil)
 	}
 
-	transaction, err := h.service.TransferMoney(r.Context(), req, userID)
+	// Extract 'from' account ID from the URL path. This is more RESTful and secure.
+	fromAccountIDStr := r.PathValue("fromAccountId")
+	fromAccountID, err := strconv.Atoi(fromAccountIDStr)
+	if err != nil {
+		return common.NewAppError(http.StatusBadRequest, "Invalid source account ID in URL path", err)
+	}
+
+	// Decode the request body (which now only contains 'to_account_id' and 'amount').
+	var req service.TransferRequest
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
+	}
+
+	// Call the updated service method.
+	transaction, err := h.service.TransferMoney(r.Context(), userID, fromAccountID, req)
 	if err != nil {
 		// Map specific business logic errors to appropriate HTTP status codes.
 		switch err {

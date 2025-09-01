@@ -32,6 +32,13 @@ func (m *MockAccountRepository) DepositToAccount(int, float64) (*model.Account, 
 	return nil, nil
 }
 func (m *MockAccountRepository) GetLastAccountNumber() (int64, error) { return 0, nil }
+func (m *MockAccountRepository) GetAccountByID(id int) (*model.Account, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Account), args.Error(1)
+}
 func (m *MockAccountRepository) GetAccountForUpdate(tx *sql.Tx, id int) (*model.Account, error) {
 	args := m.Called(tx, id)
 	if args.Get(0) == nil {
@@ -60,27 +67,48 @@ func (m *MockTransactionRepository) GetTransactionsByAccountID(id int) ([]*model
 }
 
 func TestTransactionService_TransferMoney(t *testing.T) {
-	// ... Bu test fonksiyonu değişmedi ...
+	// Setup
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
+
 	mockAccountRepo := new(MockAccountRepository)
 	mockTxnRepo := new(MockTransactionRepository)
+
 	transactionService := NewTransactionService(db, mockAccountRepo, mockTxnRepo)
+
 	ctx := context.Background()
 	userID := 1
-	req := TransferRequest{FromAccountID: 1, ToAccountID: 2, Amount: 100.0}
-	fromAccount := &model.Account{ID: 1, UserID: 1, Balance: 500.0, Currency: "TRY"}
-	toAccount := &model.Account{ID: 2, UserID: 2, Balance: 200.0, Currency: "TRY"}
+
+	// REFACTOR: fromAccountID is now a distinct variable, not part of the request struct.
+	fromAccountID := 1
+	toAccountID := 2
+
+	// REFACTOR: The request struct no longer contains FromAccountID.
+	req := TransferRequest{
+		ToAccountID: toAccountID,
+		Amount:      100.0,
+	}
+
+	fromAccount := &model.Account{ID: fromAccountID, UserID: userID, Balance: 500.0, Currency: "TRY"}
+	toAccount := &model.Account{ID: toAccountID, UserID: 2, Balance: 200.0, Currency: "TRY"}
+
+	// --- Test Case 1: Successful Transfer ---
 	t.Run("success", func(t *testing.T) {
+		// Expectations
 		dbMock.ExpectBegin()
-		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.FromAccountID).Return(fromAccount, nil).Once()
+		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, fromAccountID).Return(fromAccount, nil).Once()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.ToAccountID).Return(toAccount, nil).Once()
 		mockAccountRepo.On("UpdateAccountBalance", mock.Anything, fromAccount.ID, fromAccount.Balance-req.Amount).Return(nil).Once()
 		mockAccountRepo.On("UpdateAccountBalance", mock.Anything, toAccount.ID, toAccount.Balance+req.Amount).Return(nil).Once()
 		mockTxnRepo.On("CreateTransaction", mock.Anything, mock.AnythingOfType("*model.Transaction")).Return(nil).Once()
 		dbMock.ExpectCommit()
-		_, err := transactionService.TransferMoney(ctx, req, userID)
+
+		// Execution
+		// REFACTOR: Call the service with the new 4-argument signature.
+		_, err := transactionService.TransferMoney(ctx, userID, fromAccountID, req)
+
+		// Assertions
 		assert.NoError(t, err)
 		mockAccountRepo.AssertExpectations(t)
 		mockTxnRepo.AssertExpectations(t)
@@ -90,16 +118,17 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 	// --- Test Case 2: Insufficient Funds ---
 	t.Run("insufficient funds", func(t *testing.T) {
 		// Setup
-		fromAccountPoor := &model.Account{ID: 1, UserID: 1, Balance: 50.0, Currency: "TRY"} // Not enough balance
+		fromAccountPoor := &model.Account{ID: fromAccountID, UserID: userID, Balance: 50.0, Currency: "TRY"} // Not enough balance
 
 		// Expectations
 		dbMock.ExpectBegin()
-		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.FromAccountID).Return(fromAccountPoor, nil).Once()
+		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, fromAccountID).Return(fromAccountPoor, nil).Once()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.ToAccountID).Return(toAccount, nil).Once()
 		dbMock.ExpectRollback()
 
 		// Execution
-		_, err := transactionService.TransferMoney(ctx, req, userID)
+		// REFACTOR: Call the service with the new 4-argument signature.
+		_, err := transactionService.TransferMoney(ctx, userID, fromAccountID, req)
 
 		// Assertions
 		assert.Error(t, err)
@@ -112,7 +141,7 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 	t.Run("commit error", func(t *testing.T) {
 		// Expectations
 		dbMock.ExpectBegin()
-		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.FromAccountID).Return(fromAccount, nil).Once()
+		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, fromAccountID).Return(fromAccount, nil).Once()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.ToAccountID).Return(toAccount, nil).Once()
 		mockAccountRepo.On("UpdateAccountBalance", mock.Anything, fromAccount.ID, fromAccount.Balance-req.Amount).Return(nil).Once()
 		mockAccountRepo.On("UpdateAccountBalance", mock.Anything, toAccount.ID, toAccount.Balance+req.Amount).Return(nil).Once()
@@ -120,7 +149,8 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 		dbMock.ExpectCommit().WillReturnError(errors.New("commit failed"))
 
 		// Execution
-		_, err := transactionService.TransferMoney(ctx, req, userID)
+		// REFACTOR: Call the service with the new 4-argument signature.
+		_, err := transactionService.TransferMoney(ctx, userID, fromAccountID, req)
 
 		// Assertions
 		assert.Error(t, err)
