@@ -16,80 +16,63 @@ import (
 	"github.com/stretchr/testify/mock"
 )
 
-// TestMain runs setup before any tests in this package are executed.
 func TestMain(m *testing.M) {
-	// Initialize the logger for the test environment.
 	logger.Init()
-	// Run all tests
 	exitCode := m.Run()
-	// Exit
 	os.Exit(exitCode)
 }
 
 // MockAccountRepository is a mock for IAccountRepository.
 type MockAccountRepository struct{ mock.Mock }
 
-func (m *MockAccountRepository) GetAccountForUpdate(tx *sql.Tx, id int) (*model.Account, error) {
-	args := m.Called(tx, id)
-	// Handle nil case for failed lookups
-	if args.Get(0) == nil {
-		return nil, args.Error(1)
-	}
-	return args.Get(0).(*model.Account), args.Error(1)
-}
-func (m *MockAccountRepository) UpdateAccountBalance(tx *sql.Tx, id int, bal float64) error {
-	args := m.Called(tx, id, bal)
-	return args.Error(0)
-}
-
-// GetLastAccountNumber is added to satisfy the IAccountRepository interface contract.
-// It's not used in this test suite, so a simple implementation is sufficient.
-func (m *MockAccountRepository) GetLastAccountNumber() (int64, error) {
-	args := m.Called()
-	return 0, args.Error(1) // Return zero value and a potential error
-}
-
-// --- Unused methods that are required to satisfy the interface contract ---
 func (m *MockAccountRepository) CreateAccount(*model.Account) error                { return nil }
 func (m *MockAccountRepository) GetAccountsByUserID(int) ([]*model.Account, error) { return nil, nil }
 func (m *MockAccountRepository) GetAllAccounts() ([]*model.Account, error)         { return nil, nil }
 func (m *MockAccountRepository) DepositToAccount(int, float64) (*model.Account, error) {
 	return nil, nil
 }
+func (m *MockAccountRepository) GetLastAccountNumber() (int64, error) { return 0, nil }
+func (m *MockAccountRepository) GetAccountForUpdate(tx *sql.Tx, id int) (*model.Account, error) {
+	args := m.Called(tx, id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Account), args.Error(1)
+}
+func (m *MockAccountRepository) UpdateAccountBalance(tx *sql.Tx, id int, bal float64) error {
+	return m.Called(tx, id, bal).Error(0)
+}
 
 // MockTransactionRepository is a mock for ITransactionRepository.
 type MockTransactionRepository struct{ mock.Mock }
 
 func (m *MockTransactionRepository) CreateTransaction(tx *sql.Tx, tr *model.Transaction) error {
-	args := m.Called(tx, tr)
-	return args.Error(0)
+	return m.Called(tx, tr).Error(0)
+}
+
+// Correctly implements the new method for the interface.
+func (m *MockTransactionRepository) GetTransactionsByAccountID(id int) ([]*model.Transaction, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*model.Transaction), args.Error(1)
 }
 
 func TestTransactionService_TransferMoney(t *testing.T) {
-	// Setup
+	// ... Bu test fonksiyonu değişmedi ...
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer db.Close()
-
 	mockAccountRepo := new(MockAccountRepository)
 	mockTxnRepo := new(MockTransactionRepository)
-
 	transactionService := NewTransactionService(db, mockAccountRepo, mockTxnRepo)
-
 	ctx := context.Background()
 	userID := 1
-	req := TransferRequest{
-		FromAccountID: 1,
-		ToAccountID:   2,
-		Amount:        100.0,
-	}
-
+	req := TransferRequest{FromAccountID: 1, ToAccountID: 2, Amount: 100.0}
 	fromAccount := &model.Account{ID: 1, UserID: 1, Balance: 500.0, Currency: "TRY"}
 	toAccount := &model.Account{ID: 2, UserID: 2, Balance: 200.0, Currency: "TRY"}
-
-	// --- Test Case 1: Successful Transfer ---
 	t.Run("success", func(t *testing.T) {
-		// Expectations
 		dbMock.ExpectBegin()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.FromAccountID).Return(fromAccount, nil).Once()
 		mockAccountRepo.On("GetAccountForUpdate", mock.Anything, req.ToAccountID).Return(toAccount, nil).Once()
@@ -97,11 +80,7 @@ func TestTransactionService_TransferMoney(t *testing.T) {
 		mockAccountRepo.On("UpdateAccountBalance", mock.Anything, toAccount.ID, toAccount.Balance+req.Amount).Return(nil).Once()
 		mockTxnRepo.On("CreateTransaction", mock.Anything, mock.AnythingOfType("*model.Transaction")).Return(nil).Once()
 		dbMock.ExpectCommit()
-
-		// Execution
 		_, err := transactionService.TransferMoney(ctx, req, userID)
-
-		// Assertions
 		assert.NoError(t, err)
 		mockAccountRepo.AssertExpectations(t)
 		mockTxnRepo.AssertExpectations(t)
