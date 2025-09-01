@@ -4,8 +4,10 @@ import (
 	"encoding/json"
 	"go-bank-api/common"
 	"go-bank-api/logger"
+	"go-bank-api/model"
 	"go-bank-api/service"
 	"net/http"
+	"strconv"
 
 	"github.com/sirupsen/logrus"
 )
@@ -119,6 +121,61 @@ func (h *AccountHandler) GetAllAccounts(w http.ResponseWriter, r *http.Request) 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(accounts)
+
+	return nil
+}
+
+// DepositToAccount godoc
+// @Summary      Deposit funds into an account (Admin)
+// @Description  Deposits a specified amount into a user's account. Admin access is required.
+// @Tags         admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        accountId path int true "Account ID to deposit funds into"
+// @Param        request body model.DepositRequest true "Deposit Amount"
+// @Success      200  {object}  model.Account "The updated account details"
+// @Failure      400  {object}  common.AppError "Invalid account ID or request body"
+// @Failure      401  {object}  common.AppError "Unauthorized: Invalid or missing token"
+// @Failure      403  {object}  common.AppError "Forbidden: User does not have admin privileges"
+// @Failure      404  {object}  common.AppError "Account with the specified ID not found"
+// @Failure      500  {object}  common.AppError "Internal server error while processing the deposit"
+// @Router       /api/admin/accounts/{accountId}/deposit [post]
+func (h *AccountHandler) DepositToAccount(w http.ResponseWriter, r *http.Request) *common.AppError {
+	// Extract account ID from URL path.
+	accountIDStr := r.PathValue("accountId")
+	accountID, err := strconv.Atoi(accountIDStr)
+	if err != nil {
+		return common.NewAppError(http.StatusBadRequest, "Invalid account ID in URL path", err)
+	}
+
+	// Decode and validate the request body.
+	var req model.DepositRequest
+	if err := common.ValidateAndDecode(r, &req); err != nil {
+		return err
+	}
+
+	log := logger.Log.WithFields(logrus.Fields{
+		"target_account_id": accountID,
+		"amount":            req.Amount,
+		"admin_user_id":     r.Context().Value(UserIDKey),
+	})
+	log.Info("Admin deposit request received")
+
+	// Call the service to perform the deposit.
+	updatedAccount, err := h.service.DepositToAccount(accountID, req.Amount)
+	if err != nil {
+		// Map service-level errors to appropriate HTTP status codes.
+		if err.Error() == "account not found" {
+			return common.NewAppError(http.StatusNotFound, err.Error(), err)
+		}
+		return common.NewAppError(http.StatusInternalServerError, "Could not process deposit", err)
+	}
+
+	log.Info("Deposit successful")
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	json.NewEncoder(w).Encode(updatedAccount)
 
 	return nil
 }

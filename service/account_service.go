@@ -4,6 +4,7 @@ package service
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -85,10 +86,28 @@ func (s *AccountService) GetAllAccounts() ([]*model.Account, error) {
 	return s.repo.GetAllAccounts()
 }
 
+// DepositToAccount handles the business logic for depositing funds into a specific account.
+// It ensures the operation is valid and, upon success, invalidates the relevant user's cache.
 func (s *AccountService) DepositToAccount(accountID int, amount float64) (*model.Account, error) {
 	if amount <= 0 {
 		return nil, errors.New("deposit amount must be positive")
 	}
-	// TODO: This operation should also invalidate the user's account cache.
-	return s.repo.DepositToAccount(accountID, amount)
+
+	// 1. Perform the database operation. The repository returns the updated account,
+	// which critically includes the UserID needed for cache invalidation.
+	updatedAccount, err := s.repo.DepositToAccount(accountID, amount)
+	if err != nil {
+		// Translate potential DB errors into service-level errors.
+		if err == sql.ErrNoRows {
+			return nil, errors.New("account not found")
+		}
+		return nil, err
+	}
+
+	// 2. If the DB write is successful, invalidate the cache for the account's owner.
+	// This removes the technical debt and ensures data consistency.
+	cacheKey := fmt.Sprintf("accounts:%d", updatedAccount.UserID)
+	s.cacheClient.Del(context.Background(), cacheKey)
+
+	return updatedAccount, nil
 }

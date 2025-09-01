@@ -43,6 +43,14 @@ func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.Account
 		),
 	)
 
+	mux.Handle("POST /api/admin/accounts/{accountId}/deposit",
+		handler.AuthMiddleware(
+			handler.AdminMiddleware(
+				handler.ErrorHandlingMiddleware(accountHandler.DepositToAccount),
+			),
+		),
+	)
+
 	// --- Health & Documentation ---
 	mux.HandleFunc("GET /health", handler.HealthCheck)
 	mux.Handle("GET /swagger/", httpSwagger.WrapHandler)

@@ -22,3 +22,8 @@ type LoginRequest struct {
 type UpdateUserRoleRequest struct {
 	Role Role `json:"role" validate:"required,oneof=admin user"`
 }
+
+// DepositRequest defines the payload for an admin depositing funds into an account.
+type DepositRequest struct {
+	Amount float64 `json:"amount" validate:"required,gt=0"`
+}
