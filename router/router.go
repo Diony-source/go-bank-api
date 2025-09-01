@@ -25,6 +25,7 @@ func NewRouter(userHandler *handler.UserHandler, accountHandler *handler.Account
 	mux.Handle("GET /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.ListAccounts)))
 	mux.Handle("POST /api/accounts", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(accountHandler.CreateAccount)))
 	mux.Handle("POST /api/transfers", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(transactionHandler.CreateTransfer)))
+	mux.Handle("GET /api/accounts/{accountId}/transactions", handler.AuthMiddleware(handler.ErrorHandlingMiddleware(transactionHandler.ListTransactionsForAccount)))
 
 	// --- Admin-only Routes (Requires Admin Role) ---
 	mux.Handle("GET /api/admin/users", handler.AuthMiddleware(handler.AdminMiddleware(handler.ErrorHandlingMiddleware(userHandler.GetAllUsers))))
