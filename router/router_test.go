@@ -258,23 +258,55 @@ func TestListAccounts_Caching_Integration(t *testing.T) {
 }
 
 func TestTransfer_Integration(t *testing.T) {
+	// --- Setup ---
+	clearRedis(t) // Ensure cache isolation for this test
 	sender := createUserForTest(t, "sender", "sender@test.com", "password123")
 	receiver := createUserForTest(t, "receiver", "receiver@test.com", "password123")
 	defer cleanupUser(t, sender.Email)
 	defer cleanupUser(t, receiver.Email)
+
 	senderAccount := createAccountForTest(t, sender.ID, "TRY")
 	receiverAccount := createAccountForTest(t, receiver.ID, "TRY")
-	_, err := testApp.DB.Exec("UPDATE accounts SET balance = 500 WHERE id = $1", senderAccount.ID)
-	assert.NoError(t, err)
+
+	// Pre-fill sender's account with funds using the new admin deposit feature
+	adminUser := createUserWithRoleForTest(t, "admin_for_test", "admin.test@bank.com", "password123", model.RoleAdmin)
+	defer cleanupUser(t, adminUser.Email)
+	adminToken := loginUserForTest(t, adminUser.Email, "password123")
+
+	depositReq, _ := http.NewRequest("POST", fmt.Sprintf("/api/admin/accounts/%d/deposit", senderAccount.ID), strings.NewReader(`{"amount": 500}`))
+	depositReq.Header.Set("Authorization", "Bearer "+adminToken)
+	depositReq.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	testApp.Router.ServeHTTP(rr, depositReq)
+	assert.Equal(t, http.StatusOK, rr.Code, "Admin deposit should be successful")
+
+	// --- Test Execution ---
 	senderToken := loginUserForTest(t, sender.Email, "password123")
+
 	t.Run("successful transfer", func(t *testing.T) {
 		amount := 150.75
-		requestBody := fmt.Sprintf(`{"from_account_id": %d, "to_account_id": %d, "amount": %.2f}`, senderAccount.ID, receiverAccount.ID, amount)
-		req, _ := http.NewRequest("POST", "/api/transfers", strings.NewReader(requestBody))
+
+		// REFACTOR: The request body no longer contains from_account_id.
+		requestBody := fmt.Sprintf(`{"to_account_id": %d, "amount": %.2f}`, receiverAccount.ID, amount)
+
+		// REFACTOR: The endpoint is now resource-oriented, pointing to the source account.
+		url := fmt.Sprintf("/api/accounts/%d/transfers", senderAccount.ID)
+
+		req, _ := http.NewRequest("POST", url, strings.NewReader(requestBody))
 		req.Header.Set("Authorization", "Bearer "+senderToken)
+		req.Header.Set("Content-Type", "application/json")
+
 		rr := httptest.NewRecorder()
 		testApp.Router.ServeHTTP(rr, req)
-		assert.Equal(t, http.StatusCreated, rr.Code)
+
+		// Assertions
+		assert.Equal(t, http.StatusCreated, rr.Code, "Transfer request should be successful with the new endpoint")
+
+		// Verify the balance change in the database
+		var senderBalance float64
+		err := testApp.DB.QueryRow("SELECT balance FROM accounts WHERE id = $1", senderAccount.ID).Scan(&senderBalance)
+		assert.NoError(t, err)
+		assert.Equal(t, 500.00-amount, senderBalance, "Sender's balance should be correctly debited")
 	})
 }
 
