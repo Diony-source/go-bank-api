@@ -1,5 +1,4 @@
 // file: service/account_service_test.go
-
 package service
 
 import (
@@ -41,6 +40,13 @@ func (m *mockAccountRepo) GetAccountsByUserID(id int) ([]*model.Account, error) 
 func (m *mockAccountRepo) GetAllAccounts() ([]*model.Account, error)                { return nil, nil }
 func (m *mockAccountRepo) GetAccountForUpdate(*sql.Tx, int) (*model.Account, error) { return nil, nil }
 func (m *mockAccountRepo) UpdateAccountBalance(*sql.Tx, int, float64) error         { return nil }
+func (m *mockAccountRepo) GetAccountByID(id int) (*model.Account, error) {
+	args := m.Called(id)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*model.Account), args.Error(1)
+}
 
 // mockCacheClient provides a mock for ICacheClient, implementing the interface directly.
 type mockCacheClient struct{ mock.Mock }

@@ -9,15 +9,16 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// IAccountRepository defines the contract for account database operations.
+// IAccountRepository defines the contract for all account database operations.
 type IAccountRepository interface {
 	CreateAccount(account *model.Account) error
+	GetAccountByID(accountID int) (*model.Account, error)
 	GetAccountsByUserID(userID int) ([]*model.Account, error)
 	GetAllAccounts() ([]*model.Account, error)
 	GetAccountForUpdate(tx *sql.Tx, accountID int) (*model.Account, error)
 	UpdateAccountBalance(tx *sql.Tx, accountID int, newBalance float64) error
 	DepositToAccount(accountID int, amount float64) (*model.Account, error)
-	GetLastAccountNumber() (int64, error) // This is the new method.
+	GetLastAccountNumber() (int64, error)
 }
 
 // AccountRepository implements IAccountRepository.
@@ -25,7 +26,6 @@ type AccountRepository struct {
 	DB *sql.DB
 }
 
-// NewAccountRepository creates a new AccountRepository.
 func NewAccountRepository(db *sql.DB) *AccountRepository {
 	return &AccountRepository{DB: db}
 }
@@ -118,6 +118,31 @@ func (r *AccountRepository) GetAllAccounts() ([]*model.Account, error) {
 		accounts = append(accounts, &acc)
 	}
 	return accounts, nil
+}
+
+// GetAccountByID retrieves a single account by its primary key ID without locking.
+func (r *AccountRepository) GetAccountByID(accountID int) (*model.Account, error) {
+	log := logger.Log.WithField("account_id", accountID)
+	log.Info("Executing query to get account by ID")
+
+	account := &model.Account{}
+	query := `SELECT id, user_id, account_number, balance, currency, created_at FROM accounts WHERE id = $1`
+	err := r.DB.QueryRow(query, accountID).Scan(
+		&account.ID,
+		&account.UserID,
+		&account.AccountNumber,
+		&account.Balance,
+		&account.Currency,
+		&account.CreatedAt,
+	)
+
+	if err != nil {
+		if err != sql.ErrNoRows {
+			log.WithError(err).Error("Failed to execute get account by ID query")
+		}
+		return nil, err
+	}
+	return account, nil
 }
 
 // GetAccountForUpdate locks and retrieves an account row within a transaction.
