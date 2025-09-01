@@ -5,6 +5,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"go-bank-api/model"
 	"testing"
@@ -135,14 +136,47 @@ func TestAccountService_DepositToAccount(t *testing.T) {
 	accountService := NewAccountService(mockRepo, mockCache)
 
 	t.Run("success", func(t *testing.T) {
-		mockRepo.On("DepositToAccount", 1, 100.0).Return(&model.Account{ID: 1}, nil).Once()
-		_, err := accountService.DepositToAccount(1, 100.0)
+		accountID := 1
+		userID := 5
+		amount := 100.0
+
+		// SETUP: When the repo is called, it returns an account with a UserID.
+		mockRepo.On("DepositToAccount", accountID, amount).Return(&model.Account{ID: accountID, UserID: userID}, nil).Once()
+
+		// EXPECTATION: The service MUST call Del on the cache with the correct key for the user.
+		cacheKey := fmt.Sprintf("accounts:%d", userID)
+		mockCache.On("Del", mock.Anything, cacheKey).Return().Once()
+
+		// EXECUTION
+		_, err := accountService.DepositToAccount(accountID, amount)
+
+		// ASSERTIONS
 		assert.NoError(t, err)
 		mockRepo.AssertExpectations(t)
+		mockCache.AssertExpectations(t) // Also assert cache expectations.
 	})
+
 	t.Run("negative amount", func(t *testing.T) {
 		_, err := accountService.DepositToAccount(2, -50.0)
+
 		assert.Error(t, err)
+		assert.Equal(t, "deposit amount must be positive", err.Error())
 		mockRepo.AssertNotCalled(t, "DepositToAccount")
+		mockCache.AssertNotCalled(t, "Del")
+	})
+
+	t.Run("repository error", func(t *testing.T) {
+		accountID := 3
+		amount := 200.0
+		expectedError := errors.New("db error")
+
+		mockRepo.On("DepositToAccount", accountID, amount).Return(nil, expectedError).Once()
+
+		_, err := accountService.DepositToAccount(accountID, amount)
+
+		assert.Error(t, err)
+		assert.Equal(t, expectedError, err)
+		mockRepo.AssertExpectations(t)
+		mockCache.AssertNotCalled(t, "Del")
 	})
 }
